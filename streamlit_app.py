@@ -17,7 +17,7 @@ st.title("🧬 CD4 CD5 Hi/Lo Metabolic Pathway Explorer")
 st.markdown("""
 **Explore differential metabolic flux between CD5 hi and CD5 lo CD4+ T cells**
 - Data from Compass metabolic flux analysis
-- Pathways ranked by significance and effect size
+- **ALL pathways** ordered by effect size and significance
 - Gene associations from Mouse-GEM metabolic model
 """)
 
@@ -25,11 +25,17 @@ st.markdown("""
 def load_data():
     """Load the comprehensive pathway data"""
     try:
-        df = pd.read_csv('top_pathways_comprehensive.csv')
+        # Try the new comprehensive file first
+        df = pd.read_csv('all_pathways_comprehensive.csv')
         return df
     except FileNotFoundError:
-        st.error("Data file not found. Please upload top_pathways_comprehensive.csv")
-        return None
+        try:
+            # Fallback to old file
+            df = pd.read_csv('top_pathways_comprehensive.csv')
+            return df
+        except FileNotFoundError:
+            st.error("Data file not found. Please upload all_pathways_comprehensive.csv")
+            return None
 
 # Load data
 data = load_data()
@@ -43,10 +49,13 @@ if data is not None:
     selected_direction = st.sidebar.selectbox("Pathway Direction", direction_options)
     
     # Significance filter
-    show_significant_only = st.sidebar.checkbox("Show only significant reactions (p < 0.05)", value=True)
+    show_significant_only = st.sidebar.checkbox("Show only significant reactions (p < 0.05)", value=False)
     
     # Gene filter
     show_with_genes_only = st.sidebar.checkbox("Show only reactions with known genes", value=False)
+    
+    # Effect size threshold
+    min_effect_size = st.sidebar.slider("Minimum |Effect Size|", 0.0, 5.0, 0.0, 0.1)
     
     # Apply filters
     filtered_data = data.copy()
@@ -66,7 +75,7 @@ if data is not None:
     with col1:
         st.header("📋 Pathways")
         
-        # Get unique pathways from filtered data
+        # Get unique pathways from filtered data with stats
         pathways = filtered_data.groupby('pathway').agg({
             'pathway_direction': 'first',
             'pathway_median_d': 'first',
@@ -77,28 +86,44 @@ if data is not None:
         pathways.columns = ['pathway', 'direction', 'median_d', 'n_significant', 'n_total']
         pathways['pct_significant'] = (pathways['n_significant'] / pathways['n_total'] * 100).round(1)
         
-        # Sort pathways by effect size
-        pathways = pathways.sort_values('median_d', key=abs, ascending=False)
+        # Filter by effect size
+        pathways = pathways[abs(pathways['median_d']) >= min_effect_size]
         
-        # Pathway selector
+        # Sort pathways by effect size (absolute value) then by % significant
+        pathways['abs_median_d'] = abs(pathways['median_d'])
+        pathways = pathways.sort_values(['abs_median_d', 'pct_significant'], 
+                                       ascending=[False, False])
+        pathways = pathways.drop('abs_median_d', axis=1)
+        
+        st.write(f"**{len(pathways)} pathways match filters**")
+        
+        # Pathway selector with enhanced display
         selected_pathways = []
         for _, pathway_row in pathways.iterrows():
             pathway_name = pathway_row['pathway']
             direction_emoji = "🔴" if pathway_row['direction'] == 'CD5 hi' else "🔵"
             
-            checkbox_label = f"{direction_emoji} {pathway_name[:40]}..."
+            # Enhanced label with effect size and significance
+            effect_size = pathway_row['median_d']
+            pct_sig = pathway_row['pct_significant']
+            n_sig = pathway_row['n_significant']
+            n_total = pathway_row['n_total']
+            
+            # Truncate pathway name and add stats
+            short_name = pathway_name[:35] + "..." if len(pathway_name) > 35 else pathway_name
+            checkbox_label = f"{direction_emoji} {short_name} (d={effect_size:+.2f}, {pct_sig:.0f}% sig)"
+            
             if st.checkbox(checkbox_label, key=f"pathway_{pathway_name}"):
                 selected_pathways.append(pathway_name)
         
-        # Show pathway stats
+        # Show selected pathway summary
         if selected_pathways:
-            st.subheader("Selected Pathway Stats")
+            st.subheader("📊 Selected Pathways")
             for pathway in selected_pathways:
                 pathway_info = pathways[pathways['pathway'] == pathway].iloc[0]
-                st.write(f"**{pathway[:30]}...**")
-                st.write(f"- Direction: {pathway_info['direction']}")
-                st.write(f"- Effect size: {pathway_info['median_d']:+.2f}")
-                st.write(f"- Significant: {pathway_info['n_significant']}/{pathway_info['n_total']} ({pathway_info['pct_significant']:.1f}%)")
+                direction_color = "🔴" if pathway_info['direction'] == 'CD5 hi' else "🔵"
+                st.write(f"{direction_color} **{pathway[:40]}...**")
+                st.write(f"   Effect: {pathway_info['median_d']:+.2f} | Significant: {pathway_info['n_significant']}/{pathway_info['n_total']} ({pathway_info['pct_significant']:.1f}%)")
     
     with col2:
         st.header("🧪 Reactions")
@@ -107,7 +132,7 @@ if data is not None:
             # Filter data for selected pathways
             pathway_data = filtered_data[filtered_data['pathway'].isin(selected_pathways)]
             
-            # Sort by effect size
+            # Sort by effect size (absolute value)
             pathway_data = pathway_data.sort_values('cohens_d', key=abs, ascending=False)
             
             # Display reactions table
@@ -115,8 +140,8 @@ if data is not None:
             
             # Create display dataframe
             display_df = pathway_data[['reaction_id', 'pathway', 'cohens_d', 'p_value', 'significant', 'genes', 'n_genes', 'reaction_name']].copy()
-            display_df['pathway_short'] = display_df['pathway'].str[:30] + "..."
-            display_df['genes_short'] = display_df['genes'].str[:50] + "..."
+            display_df['pathway_short'] = display_df['pathway'].str[:25] + "..."
+            display_df['genes_short'] = display_df['genes'].str[:40] + "..."
             display_df['cohens_d'] = display_df['cohens_d'].round(2)
             display_df['p_value'] = display_df['p_value'].apply(lambda x: f"{x:.2e}")
             display_df['significant'] = display_df['significant'].map({True: "✓", False: "✗"})
@@ -145,7 +170,7 @@ if data is not None:
             selected_reaction = st.selectbox(
                 "Select a reaction for details:",
                 options=pathway_data['reaction_id'].tolist(),
-                format_func=lambda x: f"{x} ({pathway_data[pathway_data['reaction_id']==x]['cohens_d'].iloc[0]:+.2f})"
+                format_func=lambda x: f"{x} (d={pathway_data[pathway_data['reaction_id']==x]['cohens_d'].iloc[0]:+.2f})"
             )
             
             if selected_reaction:
@@ -214,7 +239,7 @@ if data is not None:
         color='direction',
         size='n_total',
         hover_data=['pathway', 'n_significant', 'n_total'],
-        title="Pathway Effect Size vs Significance",
+        title="Pathway Effect Size vs Significance (All Pathways)",
         labels={
             'median_d': "Median Cohen's d",
             'pct_significant': "% Significant Reactions",
