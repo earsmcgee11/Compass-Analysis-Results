@@ -12,7 +12,7 @@ st.set_page_config(
     layout="wide"
 )
 
-
+# Title and description
 st.title("CD4 CD5 Hi/Lo Metabolic Pathway Explorer")
 st.markdown("""
 **Explore differential metabolic flux between CD5 hi and CD5 lo CD4+ T cells**
@@ -49,36 +49,10 @@ if data is not None:
     
     # Search functionality
     st.sidebar.subheader("🔎 Search")
-    
-    col_search, col_clear = st.sidebar.columns([3, 1])
-    with col_search:
-        search_term = st.text_input(
-            "Search pathways, reactions, or genes:",
-            placeholder="e.g., glycolysis, ATP, Pfkm",
-            help="Search across pathway names, reaction names, reaction IDs, and gene symbols",
-            label_visibility="collapsed"
-        )
-    with col_clear:
-        if st.button("Clear", help="Clear search"):
-            search_term = ""
-            st.rerun()
-    
-    # Quick search buttons for popular terms
-    st.sidebar.write("**Quick searches:**")
-    quick_searches = ["glycolysis", "fatty acid", "oxidative", "transport", "ATP", "citric"]
-    
-    cols = st.sidebar.columns(3)
-    for i, term in enumerate(quick_searches):
-        with cols[i % 3]:
-            if st.button(f"🔍 {term}", key=f"quick_{term}"):
-                search_term = term
-                st.rerun()
-    
-    # Advanced search options
-    search_options = st.sidebar.multiselect(
-        "Search in:",
-        ["Pathway names", "Reaction names", "Reaction IDs", "Gene symbols"],
-        default=["Pathway names", "Gene symbols"]
+    search_term = st.sidebar.text_input(
+        "Search pathways or genes:",
+        placeholder="e.g., glycolysis, fatty acid, Pfkm, Ldha",
+        help="Search pathway names and gene symbols"
     )
     
     st.sidebar.subheader("📊 Filters")
@@ -100,21 +74,13 @@ if data is not None:
     filtered_data = data.copy()
     
     if search_term:
-        search_mask = pd.Series([False] * len(filtered_data))
         search_term_lower = search_term.lower()
         
-        if "Pathway names" in search_options:
-            search_mask |= filtered_data['pathway'].str.lower().str.contains(search_term_lower, na=False)
+        # Search in pathway names and gene symbols automatically
+        pathway_match = filtered_data['pathway'].str.lower().str.contains(search_term_lower, na=False)
+        gene_match = filtered_data['genes'].str.lower().str.contains(search_term_lower, na=False)
         
-        if "Reaction names" in search_options:
-            search_mask |= filtered_data['reaction_name'].str.lower().str.contains(search_term_lower, na=False)
-        
-        if "Reaction IDs" in search_options:
-            search_mask |= filtered_data['reaction_id'].str.lower().str.contains(search_term_lower, na=False)
-        
-        if "Gene symbols" in search_options:
-            search_mask |= filtered_data['genes'].str.lower().str.contains(search_term_lower, na=False)
-        
+        search_mask = pathway_match | gene_match
         filtered_data = filtered_data[search_mask]
         
         # Show search results summary
@@ -163,11 +129,9 @@ if data is not None:
         
         # Show search suggestions if no results
         if search_term and len(pathways) == 0:
-            st.info("💡 **Search suggestions:**")
-            st.write("Try searching for:")
-            st.write("- **Metabolic processes:** glycolysis, oxidative, fatty acid")
-            st.write("- **Specific genes:** Pfkm, Ldha, Cs, Idh1")
-            st.write("- **Reaction types:** transport, biosynthesis, metabolism")
+            st.info("💡 **Try searching for:**")
+            st.write("- **Pathways:** glycolysis, fatty acid, oxidative, transport")
+            st.write("- **Genes:** Pfkm, Ldha, Cs, Idh1, Slc2a1")
         
         # Pathway selector with enhanced display
         selected_pathways = []
