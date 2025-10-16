@@ -12,15 +12,15 @@ st.set_page_config(
     layout="wide"
 )
 
-# Title and description
-st.title("🧬 CD4 CD5 Hi/Lo Metabolic Pathway Explorer")
+
+st.title("CD4 CD5 Hi/Lo Metabolic Pathway Explorer")
 st.markdown("""
 **Explore differential metabolic flux between CD5 hi and CD5 lo CD4+ T cells**
 - Data from Compass metabolic flux analysis
 - **ALL pathways** ordered by effect size and significance
 - Gene associations from Mouse-GEM metabolic model
 - Blue means higher Cohen's D value in CD5lo, Red means higher Cohen's D value in CD5hi
-- Cohen's D measures 'how different' two groups are, so a value of 0 means no difference between CD5hi and CD5lo. 
+- Cohen's D measures 'how different' two groups are, so a value of 0 means no difference between CD5hi and CD5lo.
 - A Cohen's D value of +2 would mean CD5hi cells have higher metabolic flux in this reaction/pathway, and -2 would mean CD5lo cells have higher metabolic flux in this reaction/pathway.
 """)
 
@@ -45,7 +45,43 @@ data = load_data()
 
 if data is not None:
     # Sidebar filters
-    st.sidebar.header("🔍 Filters")
+    st.sidebar.header("🔍 Search & Filters")
+    
+    # Search functionality
+    st.sidebar.subheader("🔎 Search")
+    
+    col_search, col_clear = st.sidebar.columns([3, 1])
+    with col_search:
+        search_term = st.text_input(
+            "Search pathways, reactions, or genes:",
+            placeholder="e.g., glycolysis, ATP, Pfkm",
+            help="Search across pathway names, reaction names, reaction IDs, and gene symbols",
+            label_visibility="collapsed"
+        )
+    with col_clear:
+        if st.button("Clear", help="Clear search"):
+            search_term = ""
+            st.rerun()
+    
+    # Quick search buttons for popular terms
+    st.sidebar.write("**Quick searches:**")
+    quick_searches = ["glycolysis", "fatty acid", "oxidative", "transport", "ATP", "citric"]
+    
+    cols = st.sidebar.columns(3)
+    for i, term in enumerate(quick_searches):
+        with cols[i % 3]:
+            if st.button(f"🔍 {term}", key=f"quick_{term}"):
+                search_term = term
+                st.rerun()
+    
+    # Advanced search options
+    search_options = st.sidebar.multiselect(
+        "Search in:",
+        ["Pathway names", "Reaction names", "Reaction IDs", "Gene symbols"],
+        default=["Pathway names", "Gene symbols"]
+    )
+    
+    st.sidebar.subheader("📊 Filters")
     
     # Direction filter
     direction_options = ['All'] + list(data['pathway_direction'].unique())
@@ -60,9 +96,34 @@ if data is not None:
     # Effect size threshold
     min_effect_size = st.sidebar.slider("Minimum |Effect Size|", 0.0, 5.0, 0.0, 0.1)
     
-    # Apply filters
+    # Apply search filter
     filtered_data = data.copy()
     
+    if search_term:
+        search_mask = pd.Series([False] * len(filtered_data))
+        search_term_lower = search_term.lower()
+        
+        if "Pathway names" in search_options:
+            search_mask |= filtered_data['pathway'].str.lower().str.contains(search_term_lower, na=False)
+        
+        if "Reaction names" in search_options:
+            search_mask |= filtered_data['reaction_name'].str.lower().str.contains(search_term_lower, na=False)
+        
+        if "Reaction IDs" in search_options:
+            search_mask |= filtered_data['reaction_id'].str.lower().str.contains(search_term_lower, na=False)
+        
+        if "Gene symbols" in search_options:
+            search_mask |= filtered_data['genes'].str.lower().str.contains(search_term_lower, na=False)
+        
+        filtered_data = filtered_data[search_mask]
+        
+        # Show search results summary
+        if len(filtered_data) == 0:
+            st.sidebar.warning(f"No results found for '{search_term}'")
+        else:
+            st.sidebar.success(f"Found {len(filtered_data)} reactions matching '{search_term}'")
+    
+    # Apply other filters
     if selected_direction != 'All':
         filtered_data = filtered_data[filtered_data['pathway_direction'] == selected_direction]
     
@@ -100,6 +161,14 @@ if data is not None:
         
         st.write(f"**{len(pathways)} pathways match filters**")
         
+        # Show search suggestions if no results
+        if search_term and len(pathways) == 0:
+            st.info("💡 **Search suggestions:**")
+            st.write("Try searching for:")
+            st.write("- **Metabolic processes:** glycolysis, oxidative, fatty acid")
+            st.write("- **Specific genes:** Pfkm, Ldha, Cs, Idh1")
+            st.write("- **Reaction types:** transport, biosynthesis, metabolism")
+        
         # Pathway selector with enhanced display
         selected_pathways = []
         for _, pathway_row in pathways.iterrows():
@@ -130,6 +199,10 @@ if data is not None:
     
     with col2:
         st.header("🧪 Reactions")
+        
+        # Show search results summary in main area
+        if search_term:
+            st.info(f"🔍 Showing results for: **{search_term}**")
         
         if selected_pathways:
             # Filter data for selected pathways
