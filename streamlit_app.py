@@ -19,6 +19,9 @@ st.markdown("""
 - Data from Compass metabolic flux analysis
 - **ALL pathways** ordered by effect size and significance
 - Gene associations from Mouse-GEM metabolic model
+- Blue means higher Cohen's D value in CD5lo, Red means higher Cohen's D value in CD5hi
+- Cohen's D measures 'how different' two groups are, so a value of 0 means no difference between CD5hi and CD5lo. 
+- A Cohen's D value of +2 would mean CD5hi cells have higher metabolic flux in this reaction/pathway, and -2 would mean CD5lo cells have higher metabolic flux in this reaction/pathway.
 """)
 
 @st.cache_data
