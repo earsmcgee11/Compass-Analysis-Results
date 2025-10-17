@@ -41,12 +41,15 @@ def load_cd8_data():
     """Load CD8 comprehensive pathway data"""
     try:
         df = pd.read_csv('cd8_pathways_comprehensive_ttest.csv')
+        st.sidebar.success(f"✅ Loaded CD8 data: {len(df)} reactions")
         return df
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         try:
             df = pd.read_csv('cd8_pathways_comprehensive.csv')
+            st.sidebar.success(f"✅ Loaded CD8 data (fallback): {len(df)} reactions")
             return df
-        except FileNotFoundError:
+        except FileNotFoundError as e2:
+            st.sidebar.error(f"❌ CD8 files not found: {e}, {e2}")
             return None
 
 def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
