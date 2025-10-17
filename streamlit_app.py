@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -7,7 +6,7 @@ import plotly.graph_objects as go
 
 # Configure page
 st.set_page_config(
-    page_title="CD4 CD5 Hi/Lo Metabolic Pathway Explorer",
+    page_title="CD4/CD8 CD5 Hi/Lo Metabolic Pathway Explorer",
     page_icon="🧬",
     layout="wide"
 )
@@ -25,50 +24,64 @@ st.markdown("""
 """)
 
 @st.cache_data
-def load_data():
-    """Load the comprehensive pathway data"""
+def load_cd4_data():
+    """Load CD4 comprehensive pathway data"""
     try:
-        # Try the new comprehensive file first
         df = pd.read_csv('all_pathways_comprehensive.csv')
         return df
     except FileNotFoundError:
         try:
-            # Fallback to old file
             df = pd.read_csv('top_pathways_comprehensive.csv')
             return df
         except FileNotFoundError:
-            st.error("Data file not found. Please upload all_pathways_comprehensive.csv")
             return None
 
-# Load data
-data = load_data()
+@st.cache_data
+def load_cd8_data():
+    """Load CD8 comprehensive pathway data"""
+    try:
+        df = pd.read_csv('cd8_pathways_comprehensive_ttest.csv')
+        return df
+    except FileNotFoundError:
+        try:
+            df = pd.read_csv('cd8_pathways_comprehensive.csv')
+            return df
+        except FileNotFoundError:
+            return None
 
-if data is not None:
+def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
+    """Create the pathway explorer interface for a dataset"""
+    
+    if data is None:
+        st.error(f"{dataset_name} data file not found. Please upload the data file.")
+        return
+    
     # Sidebar filters
-    st.sidebar.header("🔍 Search & Filters")
+    st.sidebar.header(f"🔍 {dataset_name} Search & Filters")
     
     # Search functionality
     st.sidebar.subheader("🔎 Search")
     search_term = st.sidebar.text_input(
         "Search pathways or genes:",
         placeholder="e.g., glycolysis, fatty acid, Pfkm, Ldha",
-        help="Search pathway names and gene symbols"
+        help="Search pathway names and gene symbols",
+        key=f"search_{dataset_name}"
     )
     
     st.sidebar.subheader("📊 Filters")
     
     # Direction filter
     direction_options = ['All'] + list(data['pathway_direction'].unique())
-    selected_direction = st.sidebar.selectbox("Pathway Direction", direction_options)
+    selected_direction = st.sidebar.selectbox("Pathway Direction", direction_options, key=f"direction_{dataset_name}")
     
     # Significance filter
-    show_significant_only = st.sidebar.checkbox("Show only significant reactions (p < 0.05)", value=False)
+    show_significant_only = st.sidebar.checkbox("Show only significant reactions (p < 0.05)", value=False, key=f"sig_{dataset_name}")
     
     # Gene filter
-    show_with_genes_only = st.sidebar.checkbox("Show only reactions with known genes", value=False)
+    show_with_genes_only = st.sidebar.checkbox("Show only reactions with known genes", value=False, key=f"genes_{dataset_name}")
     
     # Effect size threshold
-    min_effect_size = st.sidebar.slider("Minimum |Effect Size|", 0.0, 5.0, 0.0, 0.1)
+    min_effect_size = st.sidebar.slider("Minimum |Effect Size|", 0.0, 5.0, 0.0, 0.1, key=f"effect_{dataset_name}")
     
     # Apply search filter
     filtered_data = data.copy()
@@ -137,19 +150,17 @@ if data is not None:
         selected_pathways = []
         for _, pathway_row in pathways.iterrows():
             pathway_name = pathway_row['pathway']
-            direction_emoji = "🔴" if pathway_row['direction'] == 'CD5 hi' else "🔵"
+            direction_emoji = "🔴" if hi_label in pathway_row['direction'] else "🔵"
             
             # Enhanced label with effect size and significance
             effect_size = pathway_row['median_d']
             pct_sig = pathway_row['pct_significant']
-            n_sig = pathway_row['n_significant']
-            n_total = pathway_row['n_total']
             
             # Truncate pathway name and add stats
             short_name = pathway_name[:35] + "..." if len(pathway_name) > 35 else pathway_name
             checkbox_label = f"{direction_emoji} {short_name} (d={effect_size:+.2f}, {pct_sig:.0f}% sig)"
             
-            if st.checkbox(checkbox_label, key=f"pathway_{pathway_name}"):
+            if st.checkbox(checkbox_label, key=f"pathway_{dataset_name}_{pathway_name}"):
                 selected_pathways.append(pathway_name)
         
         # Show selected pathway summary
@@ -157,7 +168,7 @@ if data is not None:
             st.subheader("📊 Selected Pathways")
             for pathway in selected_pathways:
                 pathway_info = pathways[pathways['pathway'] == pathway].iloc[0]
-                direction_color = "🔴" if pathway_info['direction'] == 'CD5 hi' else "🔵"
+                direction_color = "🔴" if hi_label in pathway_info['direction'] else "🔵"
                 st.write(f"{direction_color} **{pathway[:40]}...**")
                 st.write(f"   Effect: {pathway_info['median_d']:+.2f} | Significant: {pathway_info['n_significant']}/{pathway_info['n_total']} ({pathway_info['pct_significant']:.1f}%)")
     
@@ -210,7 +221,8 @@ if data is not None:
             selected_reaction = st.selectbox(
                 "Select a reaction for details:",
                 options=pathway_data['reaction_id'].tolist(),
-                format_func=lambda x: f"{x} (d={pathway_data[pathway_data['reaction_id']==x]['cohens_d'].iloc[0]:+.2f})"
+                format_func=lambda x: f"{x} (d={pathway_data[pathway_data['reaction_id']==x]['cohens_d'].iloc[0]:+.2f})",
+                key=f"reaction_{dataset_name}"
             )
             
             if selected_reaction:
@@ -279,17 +291,25 @@ if data is not None:
         color='direction',
         size='n_total',
         hover_data=['pathway', 'n_significant', 'n_total'],
-        title="Pathway Effect Size vs Significance (All Pathways)",
+        title=f"{dataset_name} Pathway Effect Size vs Significance (All Pathways)",
         labels={
             'median_d': "Median Cohen's d",
             'pct_significant': "% Significant Reactions",
             'direction': "Direction"
         },
-        color_discrete_map={'CD5 hi': 'red', 'CD5 lo': 'blue'}
+        color_discrete_map={f'{dataset_name}_CD5_hi': 'red', f'{dataset_name}_CD5_lo': 'blue'}
     )
     
     fig.update_layout(height=500)
     st.plotly_chart(fig, use_container_width=True)
 
-else:
-    st.error("Please upload the data file to continue.")
+# Create tabs
+tab1, tab2 = st.tabs(["🔴 CD4+ T Cells", "🔵 CD8+ T Cells"])
+
+with tab1:
+    cd4_data = load_cd4_data()
+    create_pathway_explorer(cd4_data, "CD4", "CD5 hi", "CD5 lo")
+
+with tab2:
+    cd8_data = load_cd8_data()
+    create_pathway_explorer(cd8_data, "CD8", "CD8_CD5_hi", "CD8_CD5_lo")
