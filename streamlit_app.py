@@ -320,7 +320,7 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
     st.plotly_chart(fig, use_container_width=True)
 
 # Create tabs
-tab1, tab2 = st.tabs(["🔴 CD4+ T Cells", "🔵 CD8+ T Cells"])
+tab1, tab2 = st.tabs(["CD4+ T Cells", "CD8+ T Cells"])
 
 with tab1:
     cd4_data = load_cd4_data()
