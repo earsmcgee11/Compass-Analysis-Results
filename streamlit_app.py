@@ -44,8 +44,6 @@ def load_cd8_data():
     # Check which files exist
     files_to_check = [
         'cd8_pathways_comprehensive_RAW_PVALS.csv',
-        'cd8_pathways_comprehensive_ttest.csv', 
-        'cd8_pathways_comprehensive.csv'
     ]
     
     st.sidebar.write("🔍 Checking CD8 files:")
