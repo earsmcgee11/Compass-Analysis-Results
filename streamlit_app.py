@@ -40,12 +40,12 @@ def load_cd4_data():
 def load_cd8_data():
     """Load CD8 comprehensive pathway data"""
     try:
-        df = pd.read_csv('cd8_pathways_comprehensive_ttest.csv')
-        st.sidebar.success(f"✅ Loaded CD8 data: {len(df)} reactions")
+        df = pd.read_csv('cd8_pathways_comprehensive_RAW_PVALS.csv')
+        st.sidebar.success(f"✅ Loaded CD8 data: {len(df)} reactions, {df['significant'].sum()} significant")
         return df
     except FileNotFoundError as e:
         try:
-            df = pd.read_csv('cd8_pathways_comprehensive.csv')
+            df = pd.read_csv('cd8_pathways_comprehensive_ttest.csv')
             st.sidebar.success(f"✅ Loaded CD8 data (fallback): {len(df)} reactions")
             return df
         except FileNotFoundError as e2:
