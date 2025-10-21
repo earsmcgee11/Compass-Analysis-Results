@@ -450,7 +450,7 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
                         use_container_width=True,
                         height=400
                     )
-                    else:
+            else:
                 st.info("No reactions found for selected pathways with current filters.")
         else:
             st.info("👈 Select pathways from the sidebar to view detailed reaction data")
