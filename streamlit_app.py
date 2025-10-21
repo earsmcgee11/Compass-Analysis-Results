@@ -59,7 +59,7 @@ def load_cd8_data():
 @st.cache_data
 def load_thymic_early_late():
     try:
-        df = pd.read_csv('thymic_early_vs_late_comprehensive.csv')
+        df = pd.read_csv('thymic_development_Early_vs_Late_Selection_comprehensive.csv')
         st.sidebar.success(f"✅ Early vs Late: {len(df)} reactions, {df['significant'].sum()} significant")
         return df
     except FileNotFoundError:
@@ -69,7 +69,7 @@ def load_thymic_early_late():
 @st.cache_data
 def load_thymic_late_mature():
     try:
-        df = pd.read_csv('thymic_late_vs_mature_comprehensive.csv')
+        df = pd.read_csv('thymic_development_Late_vs_Mature_CD8SP_comprehensive.csv')
         st.sidebar.success(f"✅ Late vs Mature: {len(df)} reactions, {df['significant'].sum()} significant")
         return df
     except FileNotFoundError:
@@ -79,7 +79,7 @@ def load_thymic_late_mature():
 @st.cache_data
 def load_thymic_early_mature():
     try:
-        df = pd.read_csv('thymic_early_vs_mature_comprehensive.csv')
+        df = pd.read_csv('tthymic_development_Late_vs_Mature_CD8SP_comprehensive.csv')
         st.sidebar.success(f"✅ Early vs Mature: {len(df)} reactions, {df['significant'].sum()} significant")
         return df
     except FileNotFoundError:
