@@ -187,8 +187,8 @@ def create_strain_pathway_explorer(data, dataset_name, stage_name):
         for _, pathway_row in pathways.iterrows():
             pathway_name = pathway_row['pathway']
             
-            # Color based on highest strain
-            strain_colors = {"F5": "🔴", "OT1": "🟡", "TG6": "🔵"}
+            # Color based on highest strain (by CD5 expression level)
+            strain_colors = {"OT1": "🔴", "F5": "🟡", "TG6": "🔵"}
             strain_emoji = strain_colors.get(pathway_row['highest_strain'], "⚪")
             
             # Enhanced label with effect size and significance
@@ -207,7 +207,7 @@ def create_strain_pathway_explorer(data, dataset_name, stage_name):
             st.subheader("📊 Selected Pathways")
             for pathway in selected_pathways:
                 pathway_info = pathways[pathways['pathway'] == pathway].iloc[0]
-                strain_colors = {"F5": "🔴", "OT1": "🟡", "TG6": "🔵"}
+                strain_colors = {"OT1": "🔴", "F5": "🟡", "TG6": "🔵"}
                 strain_color = strain_colors.get(pathway_info['highest_strain'], "⚪")
                 st.write(f"{strain_color} **{pathway[:40]}...**")
                 st.write(f"   Highest: {pathway_info['highest_strain']} | Effect: {pathway_info['median_d']:+.2f} | Significant: {pathway_info['n_significant']}/{pathway_info['n_total']} ({pathway_info['pct_significant']:.1f}%)")
@@ -229,7 +229,7 @@ def create_strain_pathway_explorer(data, dataset_name, stage_name):
                     x='cohens_d',
                     y=pathway_data['p_value'].apply(lambda x: -np.log10(max(x, 1e-300))),
                     color='highest_strain',
-                    color_discrete_map={"F5": "red", "OT1": "orange", "TG6": "blue"},
+                    color_discrete_map={"OT1": "red", "F5": "orange", "TG6": "blue"},
                     hover_data=['reaction_name', 'pathway', 'ranking_text'],
                     title=f"Strain Comparison Volcano Plot - {stage_name}",
                     labels={'x': "Cohen's d", 'y': '-log10(p-value)', 'color': 'Highest Strain'}
@@ -450,7 +450,7 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
                         use_container_width=True,
                         height=400
                     )
-            else:
+                    else:
                 st.info("No reactions found for selected pathways with current filters.")
         else:
             st.info("👈 Select pathways from the sidebar to view detailed reaction data")
@@ -520,7 +520,7 @@ with tab3:
     - ANOVA analysis: F5 vs OT1 vs TG6 at Early Selection stage
     - Data from Compass metabolic flux analysis of thymic development
     - Gene associations from Mouse-GEM metabolic model
-    - 🔴 **Red = Highest in F5**, 🟡 **Yellow = Highest in OT1**, 🔵 **Blue = Highest in TG6**
+    - 🔴 **Red = Highest in OT1 (High CD5)**, 🟡 **Yellow = Highest in F5 (Intermediate CD5)**, 🔵 **Blue = Highest in TG6 (Low CD5)**
     - Shows which strain has the highest metabolic activity for each pathway
     - Ranking text shows exact activity levels: "TG6 (8761.57) > F5 (8733.29) > OT1 (8650.87)"
     """)
@@ -533,7 +533,7 @@ with tab4:
     - ANOVA analysis: F5 vs OT1 vs TG6 at Late Selection stage
     - Data from Compass metabolic flux analysis of thymic development
     - Gene associations from Mouse-GEM metabolic model
-    - 🔴 **Red = Highest in F5**, 🟡 **Yellow = Highest in OT1**, 🔵 **Blue = Highest in TG6**
+    - 🔴 **Red = Highest in OT1 (High CD5)**, 🟡 **Yellow = Highest in F5 (Intermediate CD5)**, 🔵 **Blue = Highest in TG6 (Low CD5)**
     - Shows which strain has the highest metabolic activity for each pathway
     - Ranking text shows exact activity levels for each reaction
     """)
@@ -546,7 +546,7 @@ with tab5:
     - ANOVA analysis: F5 vs OT1 vs TG6 at Mature CD8SP stage
     - Data from Compass metabolic flux analysis of thymic development
     - Gene associations from Mouse-GEM metabolic model
-    - 🔴 **Red = Highest in F5**, 🟡 **Yellow = Highest in OT1**, 🔵 **Blue = Highest in TG6**
+    - 🔴 **Red = Highest in OT1 (High CD5)**, 🟡 **Yellow = Highest in F5 (Intermediate CD5)**, 🔵 **Blue = Highest in TG6 (Low CD5)**
     - Shows which strain has the highest metabolic activity for each pathway
     - Ranking text shows exact activity levels for each reaction
     """)
