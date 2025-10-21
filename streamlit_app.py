@@ -85,12 +85,19 @@ def load_thymic_early_mature():
 @st.cache_data
 def load_thymic_three_way():
     try:
-        df = pd.read_csv('thymic_three_way_anova_comprehensive.csv')
+        # Try to load the comprehensive version with stage means first
+        df = pd.read_csv('thymic_three_way_comprehensive_with_means.csv')
         st.sidebar.success(f"✅ Three-way ANOVA: {len(df)} reactions, {df['significant'].sum()} significant")
         return df
     except FileNotFoundError:
-        st.sidebar.error("❌ Three-way comparison data not found")
-        return None
+        try:
+            # Fallback to original version
+            df = pd.read_csv('thymic_three_way_anova_comprehensive.csv')
+            st.sidebar.warning(f"⚠️ Using basic three-way data: {len(df)} reactions")
+            return df
+        except FileNotFoundError:
+            st.sidebar.error("❌ Three-way comparison data not found")
+            return None
     except Exception as e:
         st.sidebar.error(f"❌ Three-way data error: {e}")
         return None
@@ -445,14 +452,27 @@ def create_three_way_pathway_explorer(data, dataset_name):
         for _, pathway_row in pathways.iterrows():
             pathway_name = pathway_row['pathway']
             
-            # COLOR LOGIC: Red for positive Cohen's d, Blue for negative Cohen's d
-            effect_size = pathway_row['median_d']
-            if effect_size > 0:
-                stage_emoji = "🔴"  # Red for positive Cohen's d
-            elif effect_size < 0:
-                stage_emoji = "🔵"  # Blue for negative Cohen's d
+            # COLOR LOGIC: Based on which stage has highest activity
+            if 'highest_stage' in pathway_row and pd.notna(pathway_row['highest_stage']):
+                # New comprehensive data with individual stage means
+                highest_stage = pathway_row['highest_stage']
+                if highest_stage == 'Mature_CD8SP':
+                    stage_emoji = "🔴"  # Red for Mature highest
+                elif highest_stage == 'Late_Selection':
+                    stage_emoji = "🟡"  # Yellow for Late highest
+                elif highest_stage == 'Early_Selection':
+                    stage_emoji = "🔵"  # Blue for Early highest
+                else:
+                    stage_emoji = "⚪"  # White for unclear
             else:
-                stage_emoji = "⚪"  # White for zero effect
+                # Fallback for old data format
+                effect_size = pathway_row['median_d']
+                if effect_size > 0:
+                    stage_emoji = "🔴"
+                elif effect_size < 0:
+                    stage_emoji = "🔵"
+                else:
+                    stage_emoji = "⚪"
             
             # Enhanced label with Cohen's d and trajectory
             effect_size = pathway_row['median_d']
@@ -470,16 +490,38 @@ def create_three_way_pathway_explorer(data, dataset_name):
             st.subheader("📊 Selected Pathways")
             for pathway in selected_pathways:
                 pathway_info = pathways[pathways['pathway'] == pathway].iloc[0]
-                # COLOR LOGIC: Red for positive Cohen's d, Blue for negative Cohen's d
-                effect_size = pathway_info['median_d']
-                if effect_size > 0:
-                    stage_color = "🔴"  # Red for positive Cohen's d
-                elif effect_size < 0:
-                    stage_color = "🔵"  # Blue for negative Cohen's d
+                
+                # COLOR LOGIC: Based on which stage has highest activity
+                if 'highest_stage' in pathway_info and pd.notna(pathway_info['highest_stage']):
+                    # New comprehensive data with individual stage means
+                    highest_stage = pathway_info['highest_stage']
+                    if highest_stage == 'Mature_CD8SP':
+                        stage_color = "🔴"  # Red for Mature highest
+                    elif highest_stage == 'Late_Selection':
+                        stage_color = "🟡"  # Yellow for Late highest
+                    elif highest_stage == 'Early_Selection':
+                        stage_color = "🔵"  # Blue for Early highest
+                    else:
+                        stage_color = "⚪"  # White for unclear
+                    
+                    # Show ranking with actual values if available
+                    if 'ranking_text' in pathway_info and pd.notna(pathway_info['ranking_text']):
+                        ranking_display = f"Ranking: {pathway_info['ranking_text']}"
+                    else:
+                        ranking_display = f"Highest: {highest_stage.replace('_', ' ')}"
                 else:
-                    stage_color = "⚪"  # White for zero effect
+                    # Fallback for old data format
+                    effect_size = pathway_info['median_d']
+                    if effect_size > 0:
+                        stage_color = "🔴"
+                    elif effect_size < 0:
+                        stage_color = "🔵"
+                    else:
+                        stage_color = "⚪"
+                    ranking_display = f"Pattern: {pathway_info['common_trajectory']} | Effect: {pathway_info['median_d']:+.2f}"
+                
                 st.write(f"{stage_color} **{pathway[:40]}...**")
-                st.write(f"   Pattern: {pathway_info['common_trajectory']} | Effect: {pathway_info['median_d']:+.2f} | Significant: {pathway_info['n_significant']}/{pathway_info['n_total']} ({pathway_info['pct_significant']:.1f}%)")
+                st.write(f"   {ranking_display} | Significant: {pathway_info['n_significant']}/{pathway_info['n_total']} ({pathway_info['pct_significant']:.1f}%)")
     
     with col2:
         st.header("🧪 Reactions")
@@ -568,6 +610,16 @@ def create_three_way_pathway_explorer(data, dataset_name):
                         st.write(f"**Pattern:** {reaction_info['developmental_trajectory']}")
                 
                 with col_b:
+                    # Show stage means if available (new comprehensive data)
+                    if 'early_mean' in reaction_info and 'late_mean' in reaction_info and 'mature_mean' in reaction_info:
+                        st.write(f"**Stage Activity Levels:**")
+                        st.write(f"- Early Selection: {reaction_info['early_mean']:.2f}")
+                        st.write(f"- Late Selection: {reaction_info['late_mean']:.2f}")
+                        st.write(f"- Mature CD8SP: {reaction_info['mature_mean']:.2f}")
+                        
+                        if 'ranking_text' in reaction_info and pd.notna(reaction_info['ranking_text']):
+                            st.write(f"**Ranking:** {reaction_info['ranking_text']}")
+                    
                     st.write(f"**Associated Genes ({reaction_info['n_genes']}):**")
                     if reaction_info['genes'] and reaction_info['genes'] != '':
                         genes_list = reaction_info['genes'].split('; ')
@@ -689,9 +741,9 @@ with tab6:
     - ANOVA analysis: Early Selection, Late Selection, and Mature CD8SP
     - Data from Compass metabolic flux analysis of thymic development
     - Gene associations from Mouse-GEM metabolic model
-    - 🔴 **Red means positive Cohen's d**, 🔵 **Blue means negative Cohen's d**, ⚪ **White means zero effect**
-    - Cohen's d measures overall effect size across stages
-    - Developmental patterns: Increasing, Decreasing, Peak, Complex
+    - 🔴 **Red = Highest in Mature CD8SP**, 🟡 **Yellow = Highest in Late Selection**, 🔵 **Blue = Highest in Early Selection**, ⚪ **White = Unclear**
+    - Shows which developmental stage has the highest metabolic activity for each pathway
+    - Ranking text shows exact activity levels: "Late Selection (2.5) > Early Selection (1.8) > Mature CD8SP (1.2)"
     """)
     if thymic_three_way_loaded is not None:
         create_three_way_pathway_explorer(thymic_three_way_loaded, "Three_Way_ANOVA")
