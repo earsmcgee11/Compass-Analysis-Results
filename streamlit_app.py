@@ -19,7 +19,6 @@ if st.sidebar.button("🔄 Clear Cache"):
     st.cache_data.clear()
     st.sidebar.success("Cache cleared! Please refresh the page.")
 
-
 @st.cache_data
 def load_cd4_data():
     """Load CD4 comprehensive pathway data"""
@@ -83,27 +82,37 @@ def load_thymic_early_mature():
         return None
 
 @st.cache_data
-def load_thymic_three_way():
+def load_strain_early():
     try:
-        # Try to load the comprehensive version with stage means first
-        df = pd.read_csv('thymic_three_way_comprehensive_with_means.csv')
-        st.sidebar.success(f"✅ Three-way ANOVA: {len(df)} reactions, {df['significant'].sum()} significant")
+        df = pd.read_csv('strain_comparison_early_selection_comprehensive.csv')
+        st.sidebar.success(f"✅ Early Strain: {len(df)} reactions, {df['significant'].sum()} significant")
         return df
     except FileNotFoundError:
-        try:
-            # Fallback to original version
-            df = pd.read_csv('thymic_three_way_anova_comprehensive.csv')
-            st.sidebar.warning(f"⚠️ Using basic three-way data: {len(df)} reactions")
-            return df
-        except FileNotFoundError:
-            st.sidebar.error("❌ Three-way comparison data not found")
-            return None
-    except Exception as e:
-        st.sidebar.error(f"❌ Three-way data error: {e}")
+        st.sidebar.error("❌ Early strain comparison data not found")
         return None
 
-def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
-    """Create the pathway explorer interface for a dataset"""
+@st.cache_data
+def load_strain_late():
+    try:
+        df = pd.read_csv('strain_comparison_late_selection_comprehensive.csv')
+        st.sidebar.success(f"✅ Late Strain: {len(df)} reactions, {df['significant'].sum()} significant")
+        return df
+    except FileNotFoundError:
+        st.sidebar.error("❌ Late strain comparison data not found")
+        return None
+
+@st.cache_data
+def load_strain_mature():
+    try:
+        df = pd.read_csv('strain_comparison_mature_cd8sp_comprehensive.csv')
+        st.sidebar.success(f"✅ Mature Strain: {len(df)} reactions, {df['significant'].sum()} significant")
+        return df
+    except FileNotFoundError:
+        st.sidebar.error("❌ Mature strain comparison data not found")
+        return None
+
+def create_strain_pathway_explorer(data, dataset_name, stage_name):
+    """Create the pathway explorer interface for strain comparisons (F5 vs OT1 vs TG6)"""
     
     if data is None:
         st.error(f"{dataset_name} data file not found. Please upload the data file.")
@@ -123,9 +132,9 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
     
     st.sidebar.subheader("📊 Filters")
     
-    # Direction filter by population/cell type
-    direction_options = ['All'] + list(data['pathway_direction'].unique())
-    selected_direction = st.sidebar.selectbox("Higher in Population", direction_options, key=f"direction_{dataset_name}")
+    # Strain filter (instead of direction)
+    strain_options = ['All'] + list(data['highest_strain'].unique())
+    selected_strain = st.sidebar.selectbox("Highest Activity Strain", strain_options, key=f"strain_{dataset_name}")
     
     # Significance filter
     show_significant_only = st.sidebar.checkbox("Show only significant reactions (p < 0.05)", value=False, key=f"sig_{dataset_name}")
@@ -155,18 +164,203 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
         else:
             st.sidebar.success(f"Found {len(filtered_data)} reactions matching '{search_term}'")
     
-    # Fix pathway_direction based on pathway median Cohen's d (for thymic data)
-    if hi_label != lo_label:  # Two-group comparison
-        filtered_data['pathway_direction_fixed'] = filtered_data['pathway_median_d'].apply(
-            lambda x: hi_label if x > 0 else lo_label
-        )
-        direction_col = 'pathway_direction_fixed'
-    else:  # Three-way comparison
-        direction_col = 'pathway_direction'
+    # Apply other filters
+    if selected_strain != 'All':
+        filtered_data = filtered_data[filtered_data['highest_strain'] == selected_strain]
+    
+    if show_significant_only:
+        filtered_data = filtered_data[filtered_data['significant'] == True]
+    
+    if show_with_genes_only:
+        filtered_data = filtered_data[filtered_data['n_genes'] > 0]
+    
+    # Main content area
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
+        st.header("📋 Pathways")
+        
+        # Get unique pathways from filtered data with stats
+        pathways = filtered_data.groupby('pathway').agg({
+            'pathway_highest_strain': 'first',
+            'pathway_median_d': 'first',
+            'significant': 'sum',
+            'reaction_id': 'count'
+        }).reset_index()
+        
+        pathways.columns = ['pathway', 'highest_strain', 'median_d', 'n_significant', 'n_total']
+        pathways['pct_significant'] = (pathways['n_significant'] / pathways['n_total'] * 100).round(1)
+        
+        # Filter by effect size
+        pathways = pathways[abs(pathways['median_d']) >= min_effect_size]
+        
+        # Sort pathways by effect size (absolute value) then by % significant
+        pathways['abs_median_d'] = abs(pathways['median_d'])
+        pathways = pathways.sort_values(['abs_median_d', 'pct_significant'], 
+                                       ascending=[False, False])
+        pathways = pathways.drop('abs_median_d', axis=1)
+        
+        st.write(f"**{len(pathways)} pathways match filters**")
+        
+        # Show search suggestions if no results
+        if search_term and len(pathways) == 0:
+            st.info("💡 **Try searching for:**")
+            st.write("- **Pathways:** glycolysis, fatty acid, oxidative, transport")
+            st.write("- **Genes:** Pfkm, Ldha, Cs, Idh1, Slc2a1")
+        
+        # Pathway selector with enhanced display
+        selected_pathways = []
+        for _, pathway_row in pathways.iterrows():
+            pathway_name = pathway_row['pathway']
+            
+            # Color based on highest strain
+            strain_colors = {"F5": "🔴", "OT1": "🟡", "TG6": "🔵"}
+            strain_emoji = strain_colors.get(pathway_row['highest_strain'], "⚪")
+            
+            # Enhanced label with effect size and significance
+            effect_size = pathway_row['median_d']
+            pct_sig = pathway_row['pct_significant']
+            
+            # Truncate pathway name and add stats
+            short_name = pathway_name[:35] + "..." if len(pathway_name) > 35 else pathway_name
+            checkbox_label = f"{strain_emoji} {short_name} (d={effect_size:+.2f}, {pct_sig:.0f}% sig)"
+            
+            if st.checkbox(checkbox_label, key=f"pathway_{dataset_name}_{pathway_name}"):
+                selected_pathways.append(pathway_name)
+        
+        # Show selected pathway summary
+        if selected_pathways:
+            st.subheader("📊 Selected Pathways")
+            for pathway in selected_pathways:
+                pathway_info = pathways[pathways['pathway'] == pathway].iloc[0]
+                strain_colors = {"F5": "🔴", "OT1": "🟡", "TG6": "🔵"}
+                strain_color = strain_colors.get(pathway_info['highest_strain'], "⚪")
+                st.write(f"{strain_color} **{pathway[:40]}...**")
+                st.write(f"   Highest: {pathway_info['highest_strain']} | Effect: {pathway_info['median_d']:+.2f} | Significant: {pathway_info['n_significant']}/{pathway_info['n_total']} ({pathway_info['pct_significant']:.1f}%)")
+    
+    with col2:
+        st.header("🧪 Reactions")
+        
+        if selected_pathways:
+            # Filter data for selected pathways
+            pathway_data = filtered_data[filtered_data['pathway'].isin(selected_pathways)]
+            
+            if len(pathway_data) > 0:
+                # Show reaction details
+                st.write(f"**{len(pathway_data)} reactions in selected pathways**")
+                
+                # Create volcano plot
+                fig = px.scatter(
+                    pathway_data,
+                    x='cohens_d',
+                    y=pathway_data['p_value'].apply(lambda x: -np.log10(max(x, 1e-300))),
+                    color='highest_strain',
+                    color_discrete_map={"F5": "red", "OT1": "orange", "TG6": "blue"},
+                    hover_data=['reaction_name', 'pathway', 'ranking_text'],
+                    title=f"Strain Comparison Volcano Plot - {stage_name}",
+                    labels={'x': "Cohen's d", 'y': '-log10(p-value)', 'color': 'Highest Strain'}
+                )
+                
+                fig.add_hline(y=-np.log10(0.05), line_dash="dash", line_color="gray", 
+                             annotation_text="p = 0.05")
+                fig.add_vline(x=0, line_dash="dash", line_color="gray")
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Show detailed table
+                display_cols = ['reaction_id', 'pathway', 'f_statistic', 'p_value', 'cohens_d', 
+                               'ranking_text', 'highest_strain', 'reaction_name', 'genes']
+                
+                if len(pathway_data) <= 1000:
+                    st.dataframe(
+                        pathway_data[display_cols].round(4),
+                        use_container_width=True,
+                        height=400
+                    )
+                else:
+                    st.warning(f"Showing first 1000 of {len(pathway_data)} reactions")
+                    st.dataframe(
+                        pathway_data[display_cols].head(1000).round(4),
+                        use_container_width=True,
+                        height=400
+                    )
+            else:
+                st.info("No reactions found for selected pathways with current filters.")
+        else:
+            st.info("👈 Select pathways from the sidebar to view detailed reaction data")
+    
+    # Summary statistics at bottom
+    st.subheader("📊 Dataset Summary")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Total Pathways", len(data['pathway'].unique()))
+    
+    with col2:
+        st.metric("Total Reactions", len(data))
+    
+    with col3:
+        st.metric("Significant Reactions", len(data[data['significant'] == True]))
+    
+    with col4:
+        st.metric("Reactions with Genes", len(data[data['n_genes'] > 0]))
+
+def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
+    """Create the pathway explorer interface for two-group comparisons"""
+    
+    if data is None:
+        st.error(f"{dataset_name} data file not found. Please upload the data file.")
+        return
+    
+    # Sidebar filters
+    st.sidebar.header(f"🔍 {dataset_name} Search & Filters")
+    
+    # Search functionality
+    st.sidebar.subheader("🔎 Search")
+    search_term = st.sidebar.text_input(
+        "Search pathways or genes:",
+        placeholder="e.g., glycolysis, fatty acid, Pfkm, Ldha",
+        help="Search pathway names and gene symbols",
+        key=f"search_{dataset_name}"
+    )
+    
+    st.sidebar.subheader("📊 Filters")
+    
+    # Direction filter
+    direction_options = ['All'] + list(data['pathway_direction'].unique())
+    selected_direction = st.sidebar.selectbox("Pathway Direction", direction_options, key=f"direction_{dataset_name}")
+    
+    # Significance filter
+    show_significant_only = st.sidebar.checkbox("Show only significant reactions (p < 0.05)", value=False, key=f"sig_{dataset_name}")
+    
+    # Gene filter
+    show_with_genes_only = st.sidebar.checkbox("Show only reactions with known genes", value=False, key=f"genes_{dataset_name}")
+    
+    # Effect size threshold
+    min_effect_size = st.sidebar.slider("Minimum |Effect Size|", 0.0, 5.0, 0.0, 0.1, key=f"effect_{dataset_name}")
+    
+    # Apply search filter
+    filtered_data = data.copy()
+    
+    if search_term:
+        search_term_lower = search_term.lower()
+        
+        # Search in pathway names and gene symbols automatically
+        pathway_match = filtered_data['pathway'].str.lower().str.contains(search_term_lower, na=False)
+        gene_match = filtered_data['genes'].str.lower().str.contains(search_term_lower, na=False)
+        
+        search_mask = pathway_match | gene_match
+        filtered_data = filtered_data[search_mask]
+        
+        # Show search results summary
+        if len(filtered_data) == 0:
+            st.sidebar.warning(f"No results found for '{search_term}'")
+        else:
+            st.sidebar.success(f"Found {len(filtered_data)} reactions matching '{search_term}'")
     
     # Apply other filters
     if selected_direction != 'All':
-        filtered_data = filtered_data[filtered_data[direction_col] == selected_direction]
+        filtered_data = filtered_data[filtered_data['pathway_direction'] == selected_direction]
     
     if show_significant_only:
         filtered_data = filtered_data[filtered_data['significant'] == True]
@@ -213,7 +407,7 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
         for _, pathway_row in pathways.iterrows():
             pathway_name = pathway_row['pathway']
             
-            # COLOR LOGIC: Red for positive Cohen's d, Blue for negative Cohen's d
+            # Color based on Cohen's d sign (red for positive, blue for negative)
             direction_emoji = "🔴" if pathway_row['median_d'] > 0 else "🔵"
             
             # Enhanced label with effect size and significance
@@ -232,7 +426,6 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
             st.subheader("📊 Selected Pathways")
             for pathway in selected_pathways:
                 pathway_info = pathways[pathways['pathway'] == pathway].iloc[0]
-                # COLOR LOGIC: Red for positive Cohen's d, Blue for negative Cohen's d
                 direction_color = "🔴" if pathway_info['median_d'] > 0 else "🔵"
                 st.write(f"{direction_color} **{pathway[:40]}...**")
                 st.write(f"   Effect: {pathway_info['median_d']:+.2f} | Significant: {pathway_info['n_significant']}/{pathway_info['n_total']} ({pathway_info['pct_significant']:.1f}%)")
@@ -240,87 +433,56 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
     with col2:
         st.header("🧪 Reactions")
         
-        # Show search results summary in main area
-        if search_term:
-            st.info(f"🔍 Showing results for: **{search_term}**")
-        
         if selected_pathways:
             # Filter data for selected pathways
             pathway_data = filtered_data[filtered_data['pathway'].isin(selected_pathways)]
             
-            # Sort by effect size (absolute value)
-            pathway_data = pathway_data.sort_values('cohens_d', key=abs, ascending=False)
-            
-            # Display reactions table
-            st.write(f"**{len(pathway_data)} reactions in selected pathway(s)**")
-            
-            # Create display dataframe
-            display_df = pathway_data[['reaction_id', 'pathway', 'cohens_d', 'p_value', 'significant', 'genes', 'n_genes', 'reaction_name']].copy()
-            display_df['pathway_short'] = display_df['pathway'].str[:25] + "..."
-            display_df['genes_short'] = display_df['genes'].str[:40] + "..."
-            display_df['cohens_d'] = display_df['cohens_d'].round(2)
-            display_df['p_value'] = display_df['p_value'].apply(lambda x: f"{x:.2e}")
-            display_df['significant'] = display_df['significant'].map({True: "✓", False: "✗"})
-            
-            # Select columns to show
-            show_columns = ['reaction_id', 'pathway_short', 'cohens_d', 'p_value', 'significant', 'n_genes', 'genes_short']
-            
-            # Display table
-            st.dataframe(
-                display_df[show_columns],
-                column_config={
-                    "reaction_id": "Reaction ID",
-                    "pathway_short": "Pathway",
-                    "cohens_d": "Cohen's d",
-                    "p_value": "p-value",
-                    "significant": "Sig",
-                    "n_genes": "# Genes",
-                    "genes_short": "Associated Genes"
-                },
-                hide_index=True,
-                use_container_width=True
-            )
-            
-            # Reaction details
-            st.subheader("🔍 Reaction Details")
-            selected_reaction = st.selectbox(
-                "Select a reaction for details:",
-                options=pathway_data['reaction_id'].tolist(),
-                format_func=lambda x: f"{x} (d={pathway_data[pathway_data['reaction_id']==x]['cohens_d'].iloc[0]:+.2f})",
-                key=f"reaction_{dataset_name}"
-            )
-            
-            if selected_reaction:
-                reaction_info = pathway_data[pathway_data['reaction_id'] == selected_reaction].iloc[0]
+            if len(pathway_data) > 0:
+                # Show reaction details
+                st.write(f"**{len(pathway_data)} reactions in selected pathways**")
                 
-                col_a, col_b = st.columns(2)
+                # Create volcano plot
+                fig = px.scatter(
+                    pathway_data,
+                    x='cohens_d',
+                    y=pathway_data['p_value'].apply(lambda x: -np.log10(max(x, 1e-300))),
+                    color=pathway_data['cohens_d'].apply(lambda x: 'Positive' if x > 0 else 'Negative'),
+                    color_discrete_map={'Positive': 'red', 'Negative': 'blue'},
+                    hover_data=['reaction_name', 'pathway'],
+                    title=f"{dataset_name} Volcano Plot",
+                    labels={'x': "Cohen's d", 'y': '-log10(p-value)', 'color': 'Direction'}
+                )
                 
-                with col_a:
-                    st.write(f"**Reaction:** {selected_reaction}")
-                    st.write(f"**Name:** {reaction_info['reaction_name']}")
-                    st.write(f"**Pathway:** {reaction_info['pathway']}")
-                    st.write(f"**Effect Size:** {reaction_info['cohens_d']:+.2f}")
-                    st.write(f"**p-value:** {reaction_info['p_value']:.2e}")
-                    st.write(f"**Significant:** {'Yes' if reaction_info['significant'] else 'No'}")
+                fig.add_hline(y=-np.log10(0.05), line_dash="dash", line_color="gray", 
+                             annotation_text="p = 0.05")
+                fig.add_vline(x=0, line_dash="dash", line_color="gray")
                 
-                with col_b:
-                    st.write(f"**Associated Genes ({reaction_info['n_genes']}):**")
-                    if reaction_info['genes'] and reaction_info['genes'] != '':
-                        genes_list = reaction_info['genes'].split('; ')
-                        for gene in genes_list:
-                            st.write(f"- {gene}")
-                    else:
-                        st.write("No genes associated")
-                    
-                    if reaction_info['ec_number'] and reaction_info['ec_number'] != 'No EC':
-                        st.write(f"**EC Number:** {reaction_info['ec_number']}")
-        
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Show detailed table
+                display_cols = ['reaction_id', 'pathway', 'cohens_d', 'p_value', 'significant', 
+                               'reaction_name', 'genes']
+                
+                if len(pathway_data) <= 1000:
+                    st.dataframe(
+                        pathway_data[display_cols].round(4),
+                        use_container_width=True,
+                        height=400
+                    )
+                else:
+                    st.warning(f"Showing first 1000 of {len(pathway_data)} reactions")
+                    st.dataframe(
+                        pathway_data[display_cols].head(1000).round(4),
+                        use_container_width=True,
+                        height=400
+                    )
+            else:
+                st.info("No reactions found for selected pathways with current filters.")
         else:
-            st.info("👈 Select one or more pathways from the left panel to view reactions")
+            st.info("👈 Select pathways from the sidebar to view detailed reaction data")
     
-    # Summary statistics
-    st.header("📊 Summary Statistics")
-    
+    # Summary statistics at bottom
+    st.subheader("📊 Dataset Summary")
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -335,338 +497,26 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
     with col4:
         st.metric("Reactions with Genes", len(data[data['n_genes'] > 0]))
     
-def create_three_way_pathway_explorer(data, dataset_name):
-    """Create specialized pathway explorer for three-way ANOVA data"""
-    
-    if data is None:
-        st.error(f"{dataset_name} data file not found. Please upload the data file.")
-        return
-    
-    # For three-way data, use Cohen's d and developmental trajectory
-    st.info("🔬 **Three-way ANOVA analysis** - Showing developmental patterns across Early Selection, Late Selection, and Mature CD8SP stages")
-    
-    # Sidebar filters
-    st.sidebar.header(f"🔍 {dataset_name} Search & Filters")
-    
-    # Search functionality
-    st.sidebar.subheader("🔎 Search")
-    search_term = st.sidebar.text_input(
-        "Search pathways or genes:",
-        placeholder="e.g., glycolysis, fatty acid, Pfkm, Ldha",
-        help="Search pathway names and gene symbols",
-        key=f"search_{dataset_name}"
-    )
-    
-    st.sidebar.subheader("📊 Filters")
-    
-    # Trajectory filter
-    if 'developmental_trajectory' in data.columns:
-        trajectory_options = ['All'] + list(data['developmental_trajectory'].unique())
-        selected_trajectory = st.sidebar.selectbox("Developmental Pattern", trajectory_options, key=f"trajectory_{dataset_name}")
-    else:
-        selected_trajectory = 'All'
-        st.sidebar.warning("⚠️ Developmental trajectory data not available")
-    
-    # Significance filter
-    show_significant_only = st.sidebar.checkbox("Show only significant reactions (p < 0.05)", value=False, key=f"sig_{dataset_name}")
-    
-    # Gene filter
-    show_with_genes_only = st.sidebar.checkbox("Show only reactions with known genes", value=False, key=f"genes_{dataset_name}")
-    
-    # Effect size threshold
-    min_effect_size = st.sidebar.slider("Minimum |Cohen's d|", 0.0, 5.0, 0.0, 0.1, key=f"effect_{dataset_name}")
-    
-    # Apply search filter
-    filtered_data = data.copy()
-    
-    if search_term:
-        search_term_lower = search_term.lower()
-        
-        # Search in pathway names and gene symbols automatically
-        pathway_match = filtered_data['pathway'].str.lower().str.contains(search_term_lower, na=False)
-        gene_match = filtered_data['genes'].str.lower().str.contains(search_term_lower, na=False)
-        
-        search_mask = pathway_match | gene_match
-        filtered_data = filtered_data[search_mask]
-        
-        # Show search results summary
-        if len(filtered_data) == 0:
-            st.sidebar.warning(f"No results found for '{search_term}'")
-        else:
-            st.sidebar.success(f"Found {len(filtered_data)} reactions matching '{search_term}'")
-    
-    # Apply other filters
-    if selected_trajectory != 'All' and 'developmental_trajectory' in filtered_data.columns:
-        filtered_data = filtered_data[filtered_data['developmental_trajectory'] == selected_trajectory]
-    
-    if show_significant_only:
-        filtered_data = filtered_data[filtered_data['significant'] == True]
-    
-    if show_with_genes_only:
-        filtered_data = filtered_data[filtered_data['n_genes'] > 0]
-    
-    # Filter by effect size
-    filtered_data = filtered_data[abs(filtered_data['cohens_d']) >= min_effect_size]
-    
-    # Main content area
-    col1, col2 = st.columns([1, 2])
-    
-    with col1:
-        st.header("📋 Pathways")
-        
-        # Get unique pathways from filtered data with stats
-        agg_dict = {
-            'cohens_d': 'median',
-            'significant': 'sum',
-            'reaction_id': 'count'
-        }
-        
-        if 'developmental_trajectory' in filtered_data.columns:
-            agg_dict['developmental_trajectory'] = lambda x: x.value_counts().index[0]  # Most common trajectory
-            
-        pathways = filtered_data.groupby('pathway').agg(agg_dict).reset_index()
-        
-        if 'developmental_trajectory' in pathways.columns:
-            pathways.columns = ['pathway', 'median_d', 'n_significant', 'n_total', 'common_trajectory']
-        else:
-            pathways.columns = ['pathway', 'median_d', 'n_significant', 'n_total']
-            pathways['common_trajectory'] = 'Unknown'
-            
-        pathways['pct_significant'] = (pathways['n_significant'] / pathways['n_total'] * 100).round(1)
-        
-        # Sort pathways by effect size (absolute value) then by % significant
-        pathways['abs_median_d'] = abs(pathways['median_d'])
-        pathways = pathways.sort_values(['abs_median_d', 'pct_significant'], ascending=[False, False])
-        pathways = pathways.drop('abs_median_d', axis=1)
-        
-        st.write(f"**{len(pathways)} pathways match filters**")
-        
-        # Show search suggestions if no results
-        if search_term and len(pathways) == 0:
-            st.info("💡 **Try searching for:**")
-            st.write("- **Pathways:** glycolysis, fatty acid, oxidative, transport")
-            st.write("- **Genes:** Pfkm, Ldha, Cs, Idh1, Slc2a1")
-        
-        # Pathway selector with enhanced display for three-way data
-        selected_pathways = []
-        for _, pathway_row in pathways.iterrows():
-            pathway_name = pathway_row['pathway']
-            
-            # COLOR LOGIC: Based on which stage has highest activity
-            if 'highest_stage' in pathway_row and pd.notna(pathway_row['highest_stage']):
-                # New comprehensive data with individual stage means
-                highest_stage = pathway_row['highest_stage']
-                if highest_stage == 'Mature_CD8SP':
-                    stage_emoji = "🔴"  # Red for Mature highest
-                elif highest_stage == 'Late_Selection':
-                    stage_emoji = "🟡"  # Yellow for Late highest
-                elif highest_stage == 'Early_Selection':
-                    stage_emoji = "🔵"  # Blue for Early highest
-                else:
-                    stage_emoji = "⚪"  # White for unclear
-            else:
-                # Fallback for old data format
-                effect_size = pathway_row['median_d']
-                if effect_size > 0:
-                    stage_emoji = "🔴"
-                elif effect_size < 0:
-                    stage_emoji = "🔵"
-                else:
-                    stage_emoji = "⚪"
-            
-            # Enhanced label with Cohen's d and trajectory
-            effect_size = pathway_row['median_d']
-            pct_sig = pathway_row['pct_significant']
-            
-            # Truncate pathway name and add stats
-            short_name = pathway_name[:30] + "..." if len(pathway_name) > 30 else pathway_name
-            checkbox_label = f"{stage_emoji} {short_name} (d={effect_size:+.2f}, {pct_sig:.0f}% sig)"
-            
-            if st.checkbox(checkbox_label, key=f"pathway_{dataset_name}_{pathway_name}"):
-                selected_pathways.append(pathway_name)
-        
-        # Show selected pathway summary
-        if selected_pathways:
-            st.subheader("📊 Selected Pathways")
-            for pathway in selected_pathways:
-                pathway_info = pathways[pathways['pathway'] == pathway].iloc[0]
-                
-                # COLOR LOGIC: Based on which stage has highest activity
-                if 'highest_stage' in pathway_info and pd.notna(pathway_info['highest_stage']):
-                    # New comprehensive data with individual stage means
-                    highest_stage = pathway_info['highest_stage']
-                    if highest_stage == 'Mature_CD8SP':
-                        stage_color = "🔴"  # Red for Mature highest
-                    elif highest_stage == 'Late_Selection':
-                        stage_color = "🟡"  # Yellow for Late highest
-                    elif highest_stage == 'Early_Selection':
-                        stage_color = "🔵"  # Blue for Early highest
-                    else:
-                        stage_color = "⚪"  # White for unclear
-                    
-                    # Show ranking with actual values if available
-                    if 'ranking_text' in pathway_info and pd.notna(pathway_info['ranking_text']):
-                        ranking_display = f"Ranking: {pathway_info['ranking_text']}"
-                    else:
-                        ranking_display = f"Highest: {highest_stage.replace('_', ' ')}"
-                else:
-                    # Fallback for old data format
-                    effect_size = pathway_info['median_d']
-                    if effect_size > 0:
-                        stage_color = "🔴"
-                    elif effect_size < 0:
-                        stage_color = "🔵"
-                    else:
-                        stage_color = "⚪"
-                    ranking_display = f"Pattern: {pathway_info['common_trajectory']} | Effect: {pathway_info['median_d']:+.2f}"
-                
-                st.write(f"{stage_color} **{pathway[:40]}...**")
-                st.write(f"   {ranking_display} | Significant: {pathway_info['n_significant']}/{pathway_info['n_total']} ({pathway_info['pct_significant']:.1f}%)")
-    
-    with col2:
-        st.header("🧪 Reactions")
-        
-        # Show search results summary in main area
-        if search_term:
-            st.info(f"🔍 Showing results for: **{search_term}**")
-        
-        if selected_pathways:
-            # Filter data for selected pathways
-            pathway_data = filtered_data[filtered_data['pathway'].isin(selected_pathways)]
-            
-            # Sort by effect size (absolute value)
-            pathway_data = pathway_data.sort_values('cohens_d', key=abs, ascending=False)
-            
-            # Display reactions table
-            st.write(f"**{len(pathway_data)} reactions in selected pathway(s)**")
-            
-            # Create display dataframe for three-way data
-            display_columns = ['reaction_id', 'pathway', 'cohens_d', 'p_value', 'significant', 'genes', 'n_genes', 'reaction_name']
-            if 'developmental_trajectory' in pathway_data.columns:
-                display_columns.insert(5, 'developmental_trajectory')
-                
-            display_df = pathway_data[display_columns].copy()
-            display_df['pathway_short'] = display_df['pathway'].str[:25] + "..."
-            display_df['genes_short'] = display_df['genes'].str[:40] + "..."
-            display_df['cohens_d'] = display_df['cohens_d'].round(2)
-            display_df['p_value'] = display_df['p_value'].apply(lambda x: f"{x:.2e}")
-            display_df['significant'] = display_df['significant'].map({True: "✓", False: "✗"})
-            
-            if 'developmental_trajectory' in display_df.columns:
-                display_df['trajectory_short'] = display_df['developmental_trajectory'].str[:15] + "..."
-                show_columns = ['reaction_id', 'pathway_short', 'cohens_d', 'p_value', 'significant', 'trajectory_short', 'n_genes', 'genes_short']
-                column_config = {
-                    "reaction_id": "Reaction ID",
-                    "pathway_short": "Pathway",
-                    "cohens_d": "Cohen's d",
-                    "p_value": "p-value",
-                    "significant": "Sig",
-                    "trajectory_short": "Pattern",
-                    "n_genes": "# Genes",
-                    "genes_short": "Associated Genes"
-                }
-            else:
-                show_columns = ['reaction_id', 'pathway_short', 'cohens_d', 'p_value', 'significant', 'n_genes', 'genes_short']
-                column_config = {
-                    "reaction_id": "Reaction ID",
-                    "pathway_short": "Pathway",
-                    "cohens_d": "Cohen's d",
-                    "p_value": "p-value",
-                    "significant": "Sig",
-                    "n_genes": "# Genes",
-                    "genes_short": "Associated Genes"
-                }
-            
-            # Display table
-            st.dataframe(
-                display_df[show_columns],
-                column_config=column_config,
-                hide_index=True,
-                use_container_width=True
-            )
-            
-            # Reaction details for three-way data
-            st.subheader("🔍 Reaction Details")
-            selected_reaction = st.selectbox(
-                "Select a reaction for details:",
-                options=pathway_data['reaction_id'].tolist(),
-                format_func=lambda x: f"{x} (d={pathway_data[pathway_data['reaction_id']==x]['cohens_d'].iloc[0]:+.2f})",
-                key=f"reaction_{dataset_name}"
-            )
-            
-            if selected_reaction:
-                reaction_info = pathway_data[pathway_data['reaction_id'] == selected_reaction].iloc[0]
-                
-                col_a, col_b = st.columns(2)
-                
-                with col_a:
-                    st.write(f"**Reaction:** {selected_reaction}")
-                    st.write(f"**Name:** {reaction_info['reaction_name']}")
-                    st.write(f"**Pathway:** {reaction_info['pathway']}")
-                    st.write(f"**Cohen's d:** {reaction_info['cohens_d']:+.2f}")
-                    st.write(f"**p-value:** {reaction_info['p_value']:.2e}")
-                    st.write(f"**Significant:** {'Yes' if reaction_info['significant'] else 'No'}")
-                    if 'developmental_trajectory' in reaction_info:
-                        st.write(f"**Pattern:** {reaction_info['developmental_trajectory']}")
-                
-                with col_b:
-                    # Show stage means if available (new comprehensive data)
-                    if 'early_mean' in reaction_info and 'late_mean' in reaction_info and 'mature_mean' in reaction_info:
-                        st.write(f"**Stage Activity Levels:**")
-                        st.write(f"- Early Selection: {reaction_info['early_mean']:.2f}")
-                        st.write(f"- Late Selection: {reaction_info['late_mean']:.2f}")
-                        st.write(f"- Mature CD8SP: {reaction_info['mature_mean']:.2f}")
-                        
-                        if 'ranking_text' in reaction_info and pd.notna(reaction_info['ranking_text']):
-                            st.write(f"**Ranking:** {reaction_info['ranking_text']}")
-                    
-                    st.write(f"**Associated Genes ({reaction_info['n_genes']}):**")
-                    if reaction_info['genes'] and reaction_info['genes'] != '':
-                        genes_list = reaction_info['genes'].split('; ')
-                        for gene in genes_list:
-                            st.write(f"- {gene}")
-                    else:
-                        st.write("No genes associated")
-                    
-                    if reaction_info['ec_number'] and reaction_info['ec_number'] != 'No EC':
-                        st.write(f"**EC Number:** {reaction_info['ec_number']}")
-
-        else:
-            st.info("👈 Select one or more pathways from the left panel to view reactions")
-    
-    # Summary statistics for three-way data
-    st.header("📊 Summary Statistics")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Total Pathways", len(data['pathway'].unique()))
-    
-    with col2:
-        st.metric("Total Reactions", len(data))
-    
-    with col3:
-        st.metric("Significant Reactions", len(data[data['significant'] == True]))
-    
-    with col4:
-        st.metric("Reactions with Genes", len(data[data['n_genes'] > 0]))
-
 # LOAD ALL DATA FIRST
 cd4_data_loaded = load_cd4_data()
 cd8_data_loaded = load_cd8_data()
 thymic_early_late_loaded = load_thymic_early_late()
 thymic_late_mature_loaded = load_thymic_late_mature()
 thymic_early_mature_loaded = load_thymic_early_mature()
-thymic_three_way_loaded = load_thymic_three_way()
+strain_early_loaded = load_strain_early()
+strain_late_loaded = load_strain_late()
+strain_mature_loaded = load_strain_mature()
 
 # CREATE TABS
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    " CD4+ T Cells", 
-    " CD8+ T Cells", 
-    " Early vs Late", 
-    " Late vs Mature", 
-    " Early vs Mature",
-    " Three-Way ANOVA"
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    "🧬 CD4+ T Cells", 
+    "🧬 CD8+ T Cells", 
+    "🔄 Early vs Late", 
+    "🔄 Late vs Mature", 
+    "🔄 Early vs Mature",
+    "🧪 Early Strains",
+    "🧪 Late Strains", 
+    "🧪 Mature Strains"
 ])
 
 with tab1:
@@ -735,18 +585,60 @@ with tab5:
     create_pathway_explorer(thymic_early_mature_loaded, "Early_vs_Mature", "Early_Selection", "Mature_CD8SP")
 
 with tab6:
-    st.header("Thymic Development: Three-Way ANOVA Comparison")
+    st.header("Strain Comparison: Early Selection Stage")
     st.markdown("""
-    **Explore reactions that differ significantly across all three developmental stages**
-    - ANOVA analysis: Early Selection, Late Selection, and Mature CD8SP
+    **Explore metabolic differences between F5, OT1, and TG6 strains during early T cell selection**
+    - ANOVA analysis: F5 vs OT1 vs TG6 at Early Selection stage
     - Data from Compass metabolic flux analysis of thymic development
     - Gene associations from Mouse-GEM metabolic model
-    - 🔴 **Red = Highest in Mature CD8SP**, 🟡 **Yellow = Highest in Late Selection**, 🔵 **Blue = Highest in Early Selection**, ⚪ **White = Unclear**
-    - Shows which developmental stage has the highest metabolic activity for each pathway
-    - Ranking text shows exact activity levels: "Late Selection (2.5) > Early Selection (1.8) > Mature CD8SP (1.2)"
+    - 🔴 **Red = Highest in F5**, 🟡 **Yellow = Highest in OT1**, 🔵 **Blue = Highest in TG6**
+    - Shows which strain has the highest metabolic activity for each pathway
+    - Ranking text shows exact activity levels: "TG6 (8761.57) > F5 (8733.29) > OT1 (8650.87)"
     """)
-    if thymic_three_way_loaded is not None:
-        create_three_way_pathway_explorer(thymic_three_way_loaded, "Three_Way_ANOVA")
-    else:
-        st.error("Three-way comparison data not available yet")
-        st.info("💡 Try clicking the '🔄 Clear Cache' button in the sidebar and refresh the page if the file exists.")
+    create_strain_pathway_explorer(strain_early_loaded, "Early_Strains", "Early Selection")
+
+with tab7:
+    st.header("Strain Comparison: Late Selection Stage")
+    st.markdown("""
+    **Explore metabolic differences between F5, OT1, and TG6 strains during late T cell selection**
+    - ANOVA analysis: F5 vs OT1 vs TG6 at Late Selection stage
+    - Data from Compass metabolic flux analysis of thymic development
+    - Gene associations from Mouse-GEM metabolic model
+    - 🔴 **Red = Highest in F5**, 🟡 **Yellow = Highest in OT1**, 🔵 **Blue = Highest in TG6**
+    - Shows which strain has the highest metabolic activity for each pathway
+    - Ranking text shows exact activity levels for each reaction
+    """)
+    create_strain_pathway_explorer(strain_late_loaded, "Late_Strains", "Late Selection")
+
+with tab8:
+    st.header("Strain Comparison: Mature CD8SP Stage")
+    st.markdown("""
+    **Explore metabolic differences between F5, OT1, and TG6 strains in mature CD8+ T cells**
+    - ANOVA analysis: F5 vs OT1 vs TG6 at Mature CD8SP stage
+    - Data from Compass metabolic flux analysis of thymic development
+    - Gene associations from Mouse-GEM metabolic model
+    - 🔴 **Red = Highest in F5**, 🟡 **Yellow = Highest in OT1**, 🔵 **Blue = Highest in TG6**
+    - Shows which strain has the highest metabolic activity for each pathway
+    - Ranking text shows exact activity levels for each reaction
+    """)
+    create_strain_pathway_explorer(strain_mature_loaded, "Mature_Strains", "Mature CD8SP")
+
+# Add Cohen's d explanation at the bottom
+st.markdown("---")
+st.subheader("📖 Understanding Cohen's d")
+st.markdown("""
+**Cohen's d** is a standardized measure of effect size that quantifies the difference between two groups:
+
+- **Cohen's d = 0**: No difference between groups
+- **Cohen's d = ±0.2**: Small effect (subtle difference)
+- **Cohen's d = ±0.5**: Medium effect (moderate difference)  
+- **Cohen's d = ±0.8**: Large effect (substantial difference)
+- **Cohen's d = ±2.0**: Very large effect (major difference)
+
+**Interpretation for metabolic data:**
+- **Positive Cohen's d**: First group has higher metabolic flux
+- **Negative Cohen's d**: Second group has higher metabolic flux
+- **Larger absolute value**: Greater difference in metabolic activity
+
+For strain comparisons, we show which strain has the highest activity and provide ranking text with exact values.
+""")
