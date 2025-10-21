@@ -148,21 +148,16 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
         else:
             st.sidebar.success(f"Found {len(filtered_data)} reactions matching '{search_term}'")
     
-    # Fix pathway_direction to match pathway median Cohen's d (for thymic data consistency)
-    def fix_pathway_direction(row, hi_label, lo_label):
-        if row['pathway_median_d'] > 0:
-            return hi_label
-        else:
-            return lo_label
-    
-    # Only fix for two-group comparisons (not three-way)
-    if hi_label != lo_label:
-        filtered_data['pathway_direction_fixed'] = filtered_data.apply(lambda row: fix_pathway_direction(row, hi_label, lo_label), axis=1)
+    # Fix pathway_direction based on pathway median Cohen's d (for thymic data)
+    if hi_label != lo_label:  # Two-group comparison
+        filtered_data['pathway_direction_fixed'] = filtered_data['pathway_median_d'].apply(
+            lambda x: hi_label if x > 0 else lo_label
+        )
         direction_col = 'pathway_direction_fixed'
-    else:
+    else:  # Three-way comparison
         direction_col = 'pathway_direction'
     
-    # Apply other filters - EXACT same logic as CD4/CD8
+    # Apply other filters
     if selected_direction != 'All':
         filtered_data = filtered_data[filtered_data[direction_col] == selected_direction]
     
