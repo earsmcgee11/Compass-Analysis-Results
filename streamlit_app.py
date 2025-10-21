@@ -189,8 +189,8 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
         for _, pathway_row in pathways.iterrows():
             pathway_name = pathway_row['pathway']
             
-            # FIXED COLOR LOGIC: Use exact string comparison, not substring matching
-            direction_emoji = "🔴" if pathway_row['direction'] == hi_label else "🔵"
+            # COLOR LOGIC: Red for positive Cohen's d, Blue for negative Cohen's d
+            direction_emoji = "🔴" if pathway_row['median_d'] > 0 else "🔵"
             
             # Enhanced label with effect size and significance
             effect_size = pathway_row['median_d']
@@ -208,8 +208,8 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
             st.subheader("📊 Selected Pathways")
             for pathway in selected_pathways:
                 pathway_info = pathways[pathways['pathway'] == pathway].iloc[0]
-                # FIXED COLOR LOGIC: Use exact string comparison
-                direction_color = "🔴" if pathway_info['direction'] == hi_label else "🔵"
+                # COLOR LOGIC: Red for positive Cohen's d, Blue for negative Cohen's d
+                direction_color = "🔴" if pathway_info['median_d'] > 0 else "🔵"
                 st.write(f"{direction_color} **{pathway[:40]}...**")
                 st.write(f"   Effect: {pathway_info['median_d']:+.2f} | Significant: {pathway_info['n_significant']}/{pathway_info['n_total']} ({pathway_info['pct_significant']:.1f}%)")
     
@@ -428,16 +428,14 @@ def create_three_way_pathway_explorer(data, dataset_name):
         for _, pathway_row in pathways.iterrows():
             pathway_name = pathway_row['pathway']
             
-            # Color by trajectory pattern
-            trajectory = pathway_row['common_trajectory']
-            if 'Increasing' in trajectory:
-                stage_emoji = "🔴"  # Red for increasing (mature highest)
-            elif 'Decreasing' in trajectory:
-                stage_emoji = "🔵"  # Blue for decreasing (early highest)
-            elif 'Peak' in trajectory:
-                stage_emoji = "🟡"  # Yellow for peak (late highest)
+            # COLOR LOGIC: Red for positive Cohen's d, Blue for negative Cohen's d
+            effect_size = pathway_row['median_d']
+            if effect_size > 0:
+                stage_emoji = "🔴"  # Red for positive Cohen's d
+            elif effect_size < 0:
+                stage_emoji = "🔵"  # Blue for negative Cohen's d
             else:
-                stage_emoji = "⚪"  # White for complex/unknown
+                stage_emoji = "⚪"  # White for zero effect
             
             # Enhanced label with Cohen's d and trajectory
             effect_size = pathway_row['median_d']
@@ -455,17 +453,16 @@ def create_three_way_pathway_explorer(data, dataset_name):
             st.subheader("📊 Selected Pathways")
             for pathway in selected_pathways:
                 pathway_info = pathways[pathways['pathway'] == pathway].iloc[0]
-                trajectory = pathway_info['common_trajectory']
-                if 'Increasing' in trajectory:
-                    stage_color = "🔴"
-                elif 'Decreasing' in trajectory:
-                    stage_color = "🔵"
-                elif 'Peak' in trajectory:
-                    stage_color = "🟡"
+                # COLOR LOGIC: Red for positive Cohen's d, Blue for negative Cohen's d
+                effect_size = pathway_info['median_d']
+                if effect_size > 0:
+                    stage_color = "🔴"  # Red for positive Cohen's d
+                elif effect_size < 0:
+                    stage_color = "🔵"  # Blue for negative Cohen's d
                 else:
-                    stage_color = "⚪"
+                    stage_color = "⚪"  # White for zero effect
                 st.write(f"{stage_color} **{pathway[:40]}...**")
-                st.write(f"   Pattern: {trajectory} | Effect: {pathway_info['median_d']:+.2f} | Significant: {pathway_info['n_significant']}/{pathway_info['n_total']} ({pathway_info['pct_significant']:.1f}%)")
+                st.write(f"   Pattern: {pathway_info['common_trajectory']} | Effect: {pathway_info['median_d']:+.2f} | Significant: {pathway_info['n_significant']}/{pathway_info['n_total']} ({pathway_info['pct_significant']:.1f}%)")
     
     with col2:
         st.header("🧪 Reactions")
@@ -610,7 +607,7 @@ with tab1:
     - Data from Compass metabolic flux analysis
     - **ALL pathways** ordered by effect size and significance
     - Gene associations from Mouse-GEM metabolic model
-    - 🔴 **Red means higher in CD5 hi**, 🔵 **Blue means higher in CD5 lo**
+    - 🔴 **Red means positive Cohen's d (CD5 hi > CD5 lo)**, 🔵 **Blue means negative Cohen's d (CD5 lo > CD5 hi)**
     - Cohen's D measures 'how different' two groups are (0 = no difference)
     - Cohen's D of +2 = CD5 hi cells have higher metabolic flux, -2 = CD5 lo cells have higher flux
     """)
@@ -623,7 +620,7 @@ with tab2:
     - Data from Compass metabolic flux analysis
     - **ALL pathways** ordered by effect size and significance
     - Gene associations from Mouse-GEM metabolic model
-    - 🔴 **Red means higher in CD8 CD5 hi**, 🔵 **Blue means higher in CD8 CD5 lo**
+    - 🔴 **Red means positive Cohen's d (CD8 CD5 hi > CD8 CD5 lo)**, 🔵 **Blue means negative Cohen's d (CD8 CD5 lo > CD8 CD5 hi)**
     - Cohen's D measures 'how different' two groups are (0 = no difference)
     - Cohen's D of +2 = CD8 CD5 hi cells have higher metabolic flux, -2 = CD8 CD5 lo cells have higher flux
     """)
@@ -636,7 +633,7 @@ with tab3:
     - Comparison: Early Selection vs Late Selection stages
     - Data from Compass metabolic flux analysis of thymic development
     - Gene associations from Mouse-GEM metabolic model
-    - 🔴 **Red means higher in Early Selection**, 🔵 **Blue means higher in Late Selection**
+    - 🔴 **Red means positive Cohen's d (Early Selection > Late Selection)**, 🔵 **Blue means negative Cohen's d (Late Selection > Early Selection)**
     - Cohen's D measures 'how different' the developmental stages are (0 = no difference)
     - Cohen's D of +2 = Early Selection higher flux, -2 = Late Selection higher flux
     """)
@@ -649,7 +646,7 @@ with tab4:
     - Comparison: Late Selection vs Mature CD8SP stages
     - Data from Compass metabolic flux analysis of thymic development
     - Gene associations from Mouse-GEM metabolic model
-    - 🔴 **Red means higher in Mature CD8SP**, 🔵 **Blue means higher in Late Selection**
+    - 🔴 **Red means positive Cohen's d (Late Selection > Mature CD8SP)**, 🔵 **Blue means negative Cohen's d (Mature CD8SP > Late Selection)**
     - Cohen's D measures 'how different' the developmental stages are (0 = no difference)
     - Cohen's D of +2 = Mature CD8SP higher flux, -2 = Late Selection higher flux
     """)
@@ -662,7 +659,7 @@ with tab5:
     - Comparison: Early Selection vs Mature CD8SP stages
     - Data from Compass metabolic flux analysis of thymic development
     - Gene associations from Mouse-GEM metabolic model
-    - 🔴 **Red means higher in Mature CD8SP**, 🔵 **Blue means higher in Early Selection**
+    - 🔴 **Red means positive Cohen's d (Early Selection > Mature CD8SP)**, 🔵 **Blue means negative Cohen's d (Mature CD8SP > Early Selection)**
     - Cohen's D measures 'how different' the developmental stages are (0 = no difference)
     - Cohen's D of +2 = Mature CD8SP higher flux, -2 = Early Selection higher flux
     """)
@@ -675,7 +672,7 @@ with tab6:
     - ANOVA analysis: Early Selection, Late Selection, and Mature CD8SP
     - Data from Compass metabolic flux analysis of thymic development
     - Gene associations from Mouse-GEM metabolic model
-    - 🔴 **Red = Increasing pattern (Mature highest)**, 🔵 **Blue = Decreasing pattern (Early highest)**, 🟡 **Yellow = Peak pattern (Late highest)**
+    - 🔴 **Red means positive Cohen's d**, 🔵 **Blue means negative Cohen's d**, ⚪ **White means zero effect**
     - Cohen's d measures overall effect size across stages
     - Developmental patterns: Increasing, Decreasing, Peak, Complex
     """)
