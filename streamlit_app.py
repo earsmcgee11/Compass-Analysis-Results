@@ -667,7 +667,7 @@ with tab4:
     - Cohen's D measures 'how different' the developmental stages are (0 = no difference)
     - Cohen's D of +2 = Mature CD8SP higher flux, -2 = Late Selection higher flux
     """)
-    create_pathway_explorer(thymic_late_mature_loaded, "Late_vs_Mature", "Mature_CD8SP", "Late_Selection")
+    create_pathway_explorer(thymic_late_mature_loaded, "Late_vs_Mature", "Late_Selection", "Mature_CD8SP")
 
 with tab5:
     st.header("Thymic Development: Early Selection vs Mature CD8SP")
@@ -680,7 +680,7 @@ with tab5:
     - Cohen's D measures 'how different' the developmental stages are (0 = no difference)
     - Cohen's D of +2 = Mature CD8SP higher flux, -2 = Early Selection higher flux
     """)
-    create_pathway_explorer(thymic_early_mature_loaded, "Early_vs_Mature", "Mature_CD8SP", "Early_Selection")
+    create_pathway_explorer(thymic_early_mature_loaded, "Early_vs_Mature", "Early_Selection", "Mature_CD8SP")
 
 with tab6:
     st.header("Thymic Development: Three-Way ANOVA Comparison")
