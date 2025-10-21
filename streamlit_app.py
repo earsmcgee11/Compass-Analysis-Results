@@ -79,7 +79,7 @@ def load_thymic_late_mature():
 @st.cache_data
 def load_thymic_early_mature():
     try:
-        df = pd.read_csv('tthymic_development_Early_vs_Mature_CD8SP_comprehensive.csv')
+        df = pd.read_csv('thymic_development_Early_vs_Mature_CD8SP_comprehensive.csv')
         st.sidebar.success(f"✅ Early vs Mature: {len(df)} reactions, {df['significant'].sum()} significant")
         return df
     except FileNotFoundError:
