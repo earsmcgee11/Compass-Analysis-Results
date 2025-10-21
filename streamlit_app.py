@@ -87,6 +87,8 @@ def load_thymic_three_way():
         st.sidebar.error("❌ Three-way comparison data not found")
         return None
 
+# Replace the create_pathway_explorer function in your streamlit_app.py with this corrected version:
+
 def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
     """Create the pathway explorer interface for a dataset"""
     
@@ -188,7 +190,9 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
         selected_pathways = []
         for _, pathway_row in pathways.iterrows():
             pathway_name = pathway_row['pathway']
-            direction_emoji = "🔴" if hi_label in pathway_row['direction'] else "🔵"
+            
+            # FIXED COLOR LOGIC: Use exact string comparison, not substring matching
+            direction_emoji = "🔴" if pathway_row['direction'] == hi_label else "🔵"
             
             # Enhanced label with effect size and significance
             effect_size = pathway_row['median_d']
@@ -206,7 +210,8 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
             st.subheader("📊 Selected Pathways")
             for pathway in selected_pathways:
                 pathway_info = pathways[pathways['pathway'] == pathway].iloc[0]
-                direction_color = "🔴" if hi_label in pathway_info['direction'] else "🔵"
+                # FIXED COLOR LOGIC: Use exact string comparison
+                direction_color = "🔴" if pathway_info['direction'] == hi_label else "🔵"
                 st.write(f"{direction_color} **{pathway[:40]}...**")
                 st.write(f"   Effect: {pathway_info['median_d']:+.2f} | Significant: {pathway_info['n_significant']}/{pathway_info['n_total']} ({pathway_info['pct_significant']:.1f}%)")
     
@@ -307,9 +312,6 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
     
     with col4:
         st.metric("Reactions with Genes", len(data[data['n_genes'] > 0]))
-        
-# Add this function to your streamlit_app.py:
-
 def create_three_way_pathway_explorer(data, dataset_name):
     """Create specialized pathway explorer for three-way ANOVA data"""
     
