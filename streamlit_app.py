@@ -148,23 +148,23 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
         else:
             st.sidebar.success(f"Found {len(filtered_data)} reactions matching '{search_term}'")
     
-    # Apply other filters - filter by pathway-level direction, not reaction-level
-    if selected_direction != 'All':
-        before_filter = len(filtered_data)
-        # Get pathways that match the selected direction based on pathway median Cohen's d
-        if selected_direction == hi_label:
-            # For hi_label, we want pathways with positive median Cohen's d
-            matching_pathways = filtered_data[filtered_data['pathway_median_d'] > 0]['pathway'].unique()
-        elif selected_direction == lo_label:
-            # For lo_label, we want pathways with negative median Cohen's d  
-            matching_pathways = filtered_data[filtered_data['pathway_median_d'] < 0]['pathway'].unique()
+    # Fix pathway_direction to match pathway median Cohen's d (for thymic data consistency)
+    def fix_pathway_direction(row, hi_label, lo_label):
+        if row['pathway_median_d'] > 0:
+            return hi_label
         else:
-            # Fallback to original logic for other cases
-            matching_pathways = filtered_data[filtered_data['pathway_direction'] == selected_direction]['pathway'].unique()
-        
-        filtered_data = filtered_data[filtered_data['pathway'].isin(matching_pathways)]
-        after_filter = len(filtered_data)
-        st.sidebar.info(f"Direction filter: {before_filter} → {after_filter} reactions")
+            return lo_label
+    
+    # Only fix for two-group comparisons (not three-way)
+    if hi_label != lo_label:
+        filtered_data['pathway_direction_fixed'] = filtered_data.apply(lambda row: fix_pathway_direction(row, hi_label, lo_label), axis=1)
+        direction_col = 'pathway_direction_fixed'
+    else:
+        direction_col = 'pathway_direction'
+    
+    # Apply other filters - EXACT same logic as CD4/CD8
+    if selected_direction != 'All':
+        filtered_data = filtered_data[filtered_data[direction_col] == selected_direction]
     
     if show_significant_only:
         filtered_data = filtered_data[filtered_data['significant'] == True]
@@ -583,7 +583,7 @@ def create_three_way_pathway_explorer(data, dataset_name):
                     
                     if reaction_info['ec_number'] and reaction_info['ec_number'] != 'No EC':
                         st.write(f"**EC Number:** {reaction_info['ec_number']}")
-        
+
         else:
             st.info("👈 Select one or more pathways from the left panel to view reactions")
     
