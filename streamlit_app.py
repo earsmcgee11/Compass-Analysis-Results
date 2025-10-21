@@ -116,9 +116,9 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
     
     st.sidebar.subheader("📊 Filters")
     
-    # Direction filter based on Cohen's d sign
-    direction_options = ['All', 'Positive Cohen\'s d (Red)', 'Negative Cohen\'s d (Blue)']
-    selected_direction = st.sidebar.selectbox("Effect Direction", direction_options, key=f"direction_{dataset_name}")
+    # Direction filter by population/cell type
+    direction_options = ['All'] + list(data['pathway_direction'].unique())
+    selected_direction = st.sidebar.selectbox("Higher in Population", direction_options, key=f"direction_{dataset_name}")
     
     # Significance filter
     show_significant_only = st.sidebar.checkbox("Show only significant reactions (p < 0.05)", value=False, key=f"sig_{dataset_name}")
@@ -150,10 +150,7 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
     
     # Apply other filters
     if selected_direction != 'All':
-        if selected_direction == 'Positive Cohen\'s d (Red)':
-            filtered_data = filtered_data[filtered_data['cohens_d'] > 0]
-        elif selected_direction == 'Negative Cohen\'s d (Blue)':
-            filtered_data = filtered_data[filtered_data['cohens_d'] < 0]
+        filtered_data = filtered_data[filtered_data['pathway_direction'] == selected_direction]
     
     if show_significant_only:
         filtered_data = filtered_data[filtered_data['significant'] == True]
