@@ -150,7 +150,10 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
     
     # Apply other filters
     if selected_direction != 'All':
+        before_filter = len(filtered_data)
         filtered_data = filtered_data[filtered_data['pathway_direction'] == selected_direction]
+        after_filter = len(filtered_data)
+        st.sidebar.info(f"Direction filter: {before_filter} → {after_filter} reactions")
     
     if show_significant_only:
         filtered_data = filtered_data[filtered_data['significant'] == True]
@@ -318,7 +321,7 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
     
     with col4:
         st.metric("Reactions with Genes", len(data[data['n_genes'] > 0]))
-
+    
 def create_three_way_pathway_explorer(data, dataset_name):
     """Create specialized pathway explorer for three-way ANOVA data"""
     
@@ -569,8 +572,8 @@ def create_three_way_pathway_explorer(data, dataset_name):
                     
                     if reaction_info['ec_number'] and reaction_info['ec_number'] != 'No EC':
                         st.write(f"**EC Number:** {reaction_info['ec_number']}")
-        
-        else:
+
+else:
             st.info("👈 Select one or more pathways from the left panel to view reactions")
     
     # Summary statistics for three-way data
