@@ -13,15 +13,6 @@ st.set_page_config(
 
 # Title and description
 st.title("Metabolic Pathway Explorer")
-st.markdown("""
-**Explore differential metabolic flux between CD5 hi and CD5 lo CD4+ T cells**
-- Data from Compass metabolic flux analysis
-- **ALL pathways** ordered by effect size and significance
-- Gene associations from Mouse-GEM metabolic model
-- Blue means higher Cohen's D value in CD5lo, Red means higher Cohen's D value in CD5hi
-- Cohen's D measures 'how different' two groups are, so a value of 0 means no difference between CD5hi and CD5lo.
-- A Cohen's D value of +2 would mean CD5hi cells have higher metabolic flux in this reaction/pathway, and -2 would mean CD5lo cells have higher metabolic flux in this reaction/pathway.
-""")
 
 
 @st.cache_data
@@ -332,31 +323,85 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     " Early vs Late", 
     " Late vs Mature", 
     " Early vs Mature",
-    " Three-Way ANOVA"
+    "Three-Way ANOVA"
 ])
 
 with tab1:
     st.header("CD4+ T Cell Metabolic Activity")
+    st.markdown("""
+    **Explore differential metabolic flux between CD5 hi and CD5 lo CD4+ T cells**
+    - Data from Compass metabolic flux analysis
+    - **ALL pathways** ordered by effect size and significance
+    - Gene associations from Mouse-GEM metabolic model
+    - 🔴 **Red means higher in CD5 hi**, 🔵 **Blue means higher in CD5 lo**
+    - Cohen's D measures 'how different' two groups are (0 = no difference)
+    - Cohen's D of +2 = CD5 hi cells have higher metabolic flux, -2 = CD5 lo cells have higher flux
+    """)
     create_pathway_explorer(cd4_data_loaded, "CD4", "CD5_hi", "CD5_lo")
 
 with tab2:
-    st.header("CD8+ T Cell Metabolic Activity") 
+    st.header("CD8+ T Cell Metabolic Activity")
+    st.markdown("""
+    **Explore differential metabolic flux between CD5 hi and CD5 lo CD8+ T cells**
+    - Data from Compass metabolic flux analysis
+    - **ALL pathways** ordered by effect size and significance
+    - Gene associations from Mouse-GEM metabolic model
+    - 🔴 **Red means higher in CD8 CD5 hi**, 🔵 **Blue means higher in CD8 CD5 lo**
+    - Cohen's D measures 'how different' two groups are (0 = no difference)
+    - Cohen's D of +2 = CD8 CD5 hi cells have higher metabolic flux, -2 = CD8 CD5 lo cells have higher flux
+    """)
     create_pathway_explorer(cd8_data_loaded, "CD8", "CD8_CD5_hi", "CD8_CD5_lo")
 
 with tab3:
     st.header("Thymic Development: Early vs Late Selection")
+    st.markdown("""
+    **Explore metabolic changes during T cell positive selection**
+    - Comparison: Early Selection vs Late Selection stages
+    - Data from Compass metabolic flux analysis of thymic development
+    - Gene associations from Mouse-GEM metabolic model
+    - 🔴 **Red means higher in Early Selection**, 🔵 **Blue means higher in Late Selection**
+    - Cohen's D measures 'how different' the developmental stages are (0 = no difference)
+    - Cohen's D of +2 = Early Selection higher flux, -2 = Late Selection higher flux
+    """)
     create_pathway_explorer(thymic_early_late_loaded, "Early_vs_Late", "Early_Selection", "Late_Selection")
 
 with tab4:
     st.header("Thymic Development: Late Selection vs Mature CD8SP")
+    st.markdown("""
+    **Explore metabolic changes during T cell maturation**
+    - Comparison: Late Selection vs Mature CD8SP stages
+    - Data from Compass metabolic flux analysis of thymic development
+    - Gene associations from Mouse-GEM metabolic model
+    - 🔴 **Red means higher in Mature CD8SP**, 🔵 **Blue means higher in Late Selection**
+    - Cohen's D measures 'how different' the developmental stages are (0 = no difference)
+    - Cohen's D of +2 = Mature CD8SP higher flux, -2 = Late Selection higher flux
+    """)
     create_pathway_explorer(thymic_late_mature_loaded, "Late_vs_Mature", "Mature_CD8SP", "Late_Selection")
 
 with tab5:
     st.header("Thymic Development: Early Selection vs Mature CD8SP")
+    st.markdown("""
+    **Explore metabolic changes across T cell development**
+    - Comparison: Early Selection vs Mature CD8SP stages
+    - Data from Compass metabolic flux analysis of thymic development
+    - Gene associations from Mouse-GEM metabolic model
+    - 🔴 **Red means higher in Mature CD8SP**, 🔵 **Blue means higher in Early Selection**
+    - Cohen's D measures 'how different' the developmental stages are (0 = no difference)
+    - Cohen's D of +2 = Mature CD8SP higher flux, -2 = Early Selection higher flux
+    """)
     create_pathway_explorer(thymic_early_mature_loaded, "Early_vs_Mature", "Mature_CD8SP", "Early_Selection")
 
 with tab6:
     st.header("Thymic Development: Three-Way ANOVA Comparison")
+    st.markdown("""
+    **Explore reactions that differ significantly across all three developmental stages**
+    - ANOVA analysis: Early Selection, Late Selection, and Mature CD8SP
+    - Data from Compass metabolic flux analysis of thymic development
+    - Gene associations from Mouse-GEM metabolic model
+    - 🔴 **Red means highest in Mature CD8SP**, 🔵 **Blue means highest in Early Selection**
+    - F-statistic measures overall difference across all three stages
+    - Higher F-statistic = more dramatic changes during development
+    """)
     if thymic_three_way_loaded is not None:
         st.info("🔬 **Three-way ANOVA analysis** showing reactions that differ significantly across Early Selection, Late Selection, and Mature CD8SP stages")
         create_pathway_explorer(thymic_three_way_loaded, "Three_Way_ANOVA", "Mature_CD8SP", "Early_Selection")
