@@ -14,6 +14,11 @@ st.set_page_config(
 # Title and description
 st.title("Metabolic Pathway Explorer")
 
+# Add cache clear button in sidebar
+if st.sidebar.button("🔄 Clear Cache"):
+    st.cache_data.clear()
+    st.sidebar.success("Cache cleared! Please refresh the page.")
+
 
 @st.cache_data
 def load_cd4_data():
@@ -86,6 +91,9 @@ def load_thymic_three_way():
     except FileNotFoundError:
         st.sidebar.error("❌ Three-way comparison data not found")
         return None
+    except Exception as e:
+        st.sidebar.error(f"❌ Three-way data error: {e}")
+        return None
 
 def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
     """Create the pathway explorer interface for a dataset"""
@@ -108,9 +116,9 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
     
     st.sidebar.subheader("📊 Filters")
     
-    # Direction filter
-    direction_options = ['All'] + list(data['pathway_direction'].unique())
-    selected_direction = st.sidebar.selectbox("Pathway Direction", direction_options, key=f"direction_{dataset_name}")
+    # Direction filter based on Cohen's d sign
+    direction_options = ['All', 'Positive Cohen\'s d (Red)', 'Negative Cohen\'s d (Blue)']
+    selected_direction = st.sidebar.selectbox("Effect Direction", direction_options, key=f"direction_{dataset_name}")
     
     # Significance filter
     show_significant_only = st.sidebar.checkbox("Show only significant reactions (p < 0.05)", value=False, key=f"sig_{dataset_name}")
@@ -142,7 +150,10 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
     
     # Apply other filters
     if selected_direction != 'All':
-        filtered_data = filtered_data[filtered_data['pathway_direction'] == selected_direction]
+        if selected_direction == 'Positive Cohen\'s d (Red)':
+            filtered_data = filtered_data[filtered_data['cohens_d'] > 0]
+        elif selected_direction == 'Negative Cohen\'s d (Blue)':
+            filtered_data = filtered_data[filtered_data['cohens_d'] < 0]
     
     if show_significant_only:
         filtered_data = filtered_data[filtered_data['significant'] == True]
@@ -680,3 +691,4 @@ with tab6:
         create_three_way_pathway_explorer(thymic_three_way_loaded, "Three_Way_ANOVA")
     else:
         st.error("Three-way comparison data not available yet")
+        st.info("💡 Try clicking the '🔄 Clear Cache' button in the sidebar and refresh the page if the file exists.")
