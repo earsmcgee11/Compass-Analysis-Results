@@ -572,8 +572,8 @@ def create_three_way_pathway_explorer(data, dataset_name):
                     
                     if reaction_info['ec_number'] and reaction_info['ec_number'] != 'No EC':
                         st.write(f"**EC Number:** {reaction_info['ec_number']}")
-
-else:
+        
+        else:
             st.info("👈 Select one or more pathways from the left panel to view reactions")
     
     # Summary statistics for three-way data
