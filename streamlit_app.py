@@ -6,13 +6,13 @@ import plotly.graph_objects as go
 
 # Configure page
 st.set_page_config(
-    page_title="CD4/CD8 CD5 Hi/Lo Metabolic Pathway Explorer",
+    page_title="Metabolic Pathway Explorer",
     page_icon="🧬",
     layout="wide"
 )
 
 # Title and description
-st.title("CD4 CD5 Hi/Lo Metabolic Pathway Explorer")
+st.title("Metabolic Pathway Explorer")
 st.markdown("""
 **Explore differential metabolic flux between CD5 hi and CD5 lo CD4+ T cells**
 - Data from Compass metabolic flux analysis
@@ -23,47 +23,78 @@ st.markdown("""
 - A Cohen's D value of +2 would mean CD5hi cells have higher metabolic flux in this reaction/pathway, and -2 would mean CD5lo cells have higher metabolic flux in this reaction/pathway.
 """)
 
+
 @st.cache_data
 def load_cd4_data():
     """Load CD4 comprehensive pathway data"""
     try:
         df = pd.read_csv('all_pathways_comprehensive.csv')
+        st.sidebar.success(f"✅ Loaded CD4: {len(df)} reactions, {df['significant'].sum()} significant")
         return df
     except FileNotFoundError:
         try:
             df = pd.read_csv('top_pathways_comprehensive.csv')
+            st.sidebar.warning(f"⚠️ Using fallback CD4: {len(df)} reactions")
             return df
         except FileNotFoundError:
+            st.sidebar.error("❌ CD4 data not found")
             return None
 
 @st.cache_data
 def load_cd8_data():
     """Load CD8 comprehensive pathway data"""
-    import os
-    
-    # Check which files exist
-    files_to_check = [
-        'cd8_pathways_comprehensive_RAW_PVALS.csv',
-    ]
-    
-    st.sidebar.write("🔍 Checking CD8 files:")
-    for file in files_to_check:
-        exists = os.path.exists(file)
-        st.sidebar.write(f"  {file}: {'✅' if exists else '❌'}")
-    
     try:
         df = pd.read_csv('cd8_pathways_comprehensive_RAW_PVALS.csv')
-        st.sidebar.success(f"✅ Loaded RAW_PVALS: {len(df)} reactions, {df['significant'].sum()} significant")
+        st.sidebar.success(f"✅ Loaded CD8: {len(df)} reactions, {df['significant'].sum()} significant")
         return df
     except Exception as e:
-        st.sidebar.error(f"❌ RAW_PVALS failed: {e}")
         try:
             df = pd.read_csv('cd8_pathways_comprehensive_ttest.csv')
-            st.sidebar.warning(f"⚠️ Using fallback ttest: {len(df)} reactions")
+            st.sidebar.warning(f"⚠️ Using fallback CD8: {len(df)} reactions")
             return df
         except Exception as e2:
-            st.sidebar.error(f"❌ All CD8 files failed: {e2}")
+            st.sidebar.error(f"❌ CD8 data not found: {e2}")
             return None
+
+@st.cache_data
+def load_thymic_early_late():
+    try:
+        df = pd.read_csv('thymic_early_vs_late_comprehensive.csv')
+        st.sidebar.success(f"✅ Early vs Late: {len(df)} reactions, {df['significant'].sum()} significant")
+        return df
+    except FileNotFoundError:
+        st.sidebar.error("❌ Early vs Late data not found")
+        return None
+
+@st.cache_data
+def load_thymic_late_mature():
+    try:
+        df = pd.read_csv('thymic_late_vs_mature_comprehensive.csv')
+        st.sidebar.success(f"✅ Late vs Mature: {len(df)} reactions, {df['significant'].sum()} significant")
+        return df
+    except FileNotFoundError:
+        st.sidebar.error("❌ Late vs Mature data not found")
+        return None
+
+@st.cache_data
+def load_thymic_early_mature():
+    try:
+        df = pd.read_csv('thymic_early_vs_mature_comprehensive.csv')
+        st.sidebar.success(f"✅ Early vs Mature: {len(df)} reactions, {df['significant'].sum()} significant")
+        return df
+    except FileNotFoundError:
+        st.sidebar.error("❌ Early vs Mature data not found")
+        return None
+
+@st.cache_data
+def load_thymic_three_way():
+    try:
+        df = pd.read_csv('thymic_three_way_anova_comprehensive.csv')
+        st.sidebar.success(f"✅ Three-way ANOVA: {len(df)} reactions, {df['significant'].sum()} significant")
+        return df
+    except FileNotFoundError:
+        st.sidebar.error("❌ Three-way comparison data not found")
+        return None
 
 def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
     """Create the pathway explorer interface for a dataset"""
@@ -285,47 +316,49 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
     
     with col4:
         st.metric("Reactions with Genes", len(data[data['n_genes'] > 0]))
-    
-    # Pathway overview plot
-    st.header("📈 Pathway Overview")
-    
-    # Create pathway summary for plotting
-    pathway_summary = data.groupby(['pathway', 'pathway_direction']).agg({
-        'pathway_median_d': 'first',
-        'significant': 'sum',
-        'reaction_id': 'count'
-    }).reset_index()
-    
-    pathway_summary.columns = ['pathway', 'direction', 'median_d', 'n_significant', 'n_total']
-    pathway_summary['pct_significant'] = pathway_summary['n_significant'] / pathway_summary['n_total'] * 100
-    
-    # Create interactive plot
-    fig = px.scatter(
-        pathway_summary,
-        x='median_d',
-        y='pct_significant',
-        color='direction',
-        size='n_total',
-        hover_data=['pathway', 'n_significant', 'n_total'],
-        title=f"{dataset_name} Pathway Effect Size vs Significance (All Pathways)",
-        labels={
-            'median_d': "Median Cohen's d",
-            'pct_significant': "% Significant Reactions",
-            'direction': "Direction"
-        },
-        color_discrete_map={f'{dataset_name}_CD5_hi': 'red', f'{dataset_name}_CD5_lo': 'blue'}
-    )
-    
-    fig.update_layout(height=500)
-    st.plotly_chart(fig, use_container_width=True)
 
-# Create tabs
-tab1, tab2 = st.tabs(["CD4+ T Cells", "CD8+ T Cells"])
+# LOAD ALL DATA FIRST
+cd4_data_loaded = load_cd4_data()
+cd8_data_loaded = load_cd8_data()
+thymic_early_late_loaded = load_thymic_early_late()
+thymic_late_mature_loaded = load_thymic_late_mature()
+thymic_early_mature_loaded = load_thymic_early_mature()
+thymic_three_way_loaded = load_thymic_three_way()
+
+# CREATE TABS
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    " CD4+ T Cells", 
+    " CD8+ T Cells", 
+    " Early vs Late", 
+    " Late vs Mature", 
+    " Early vs Mature",
+    " Three-Way ANOVA"
+])
 
 with tab1:
-    cd4_data = load_cd4_data()
-    create_pathway_explorer(cd4_data, "CD4", "CD5 hi", "CD5 lo")
+    st.header("CD4+ T Cell Metabolic Activity")
+    create_pathway_explorer(cd4_data_loaded, "CD4", "CD5_hi", "CD5_lo")
 
 with tab2:
-    cd8_data = load_cd8_data()
-    create_pathway_explorer(cd8_data, "CD8", "CD8_CD5_hi", "CD8_CD5_lo")
+    st.header("CD8+ T Cell Metabolic Activity") 
+    create_pathway_explorer(cd8_data_loaded, "CD8", "CD8_CD5_hi", "CD8_CD5_lo")
+
+with tab3:
+    st.header("Thymic Development: Early vs Late Selection")
+    create_pathway_explorer(thymic_early_late_loaded, "Early_vs_Late", "Early_Selection", "Late_Selection")
+
+with tab4:
+    st.header("Thymic Development: Late Selection vs Mature CD8SP")
+    create_pathway_explorer(thymic_late_mature_loaded, "Late_vs_Mature", "Mature_CD8SP", "Late_Selection")
+
+with tab5:
+    st.header("Thymic Development: Early Selection vs Mature CD8SP")
+    create_pathway_explorer(thymic_early_mature_loaded, "Early_vs_Mature", "Mature_CD8SP", "Early_Selection")
+
+with tab6:
+    st.header("Thymic Development: Three-Way ANOVA Comparison")
+    if thymic_three_way_loaded is not None:
+        st.info("🔬 **Three-way ANOVA analysis** showing reactions that differ significantly across Early Selection, Late Selection, and Mature CD8SP stages")
+        create_pathway_explorer(thymic_three_way_loaded, "Three_Way_ANOVA", "Mature_CD8SP", "Early_Selection")
+    else:
+        st.error("Three-way comparison data not available yet")
