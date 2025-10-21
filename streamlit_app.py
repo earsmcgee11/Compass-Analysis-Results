@@ -334,12 +334,31 @@ def create_three_way_pathway_explorer(data, dataset_name):
     st.sidebar.subheader("📊 Filters")
     
     # Trajectory filter (instead of direction)
-    trajectory_options = ['All'] + list(data['developmental_trajectory'].unique())
-    selected_trajectory = st.sidebar.selectbox("Developmental Pattern", trajectory_options, key=f"trajectory_{dataset_name}")
+    if 'developmental_trajectory' in data.columns:
+        trajectory_options = ['All'] + list(data['developmental_trajectory'].unique())
+        selected_trajectory = st.sidebar.selectbox("Developmental Pattern", trajectory_options, key=f"trajectory_{dataset_name}")
+    else:
+        selected_trajectory = 'All'
+        st.sidebar.warning("⚠️ Developmental trajectory data not available")
     
-    # Stage with highest activity filter
-    stage_options = ['All'] + list(data['pathway_direction'].unique())
-    selected_stage = st.sidebar.selectbox("Highest Activity Stage", stage_options, key=f"stage_{dataset_name}")
+    # Stage with highest activity filter - for three-way data, we need to determine this from the means
+    if 'early_mean' in data.columns and 'late_mean' in data.columns and 'mature_mean' in data.columns:
+        # Calculate highest stage for each reaction
+        data_copy = data.copy()
+        def get_highest_stage(row):
+            means = {
+                'Early_Selection': row['early_mean'],
+                'Late_Selection': row['late_mean'], 
+                'Mature_CD8SP': row['mature_mean']
+            }
+            return max(means, key=means.get)
+        
+        data_copy['highest_stage'] = data_copy.apply(get_highest_stage, axis=1)
+        stage_options = ['All'] + list(data_copy['highest_stage'].unique())
+        selected_stage = st.sidebar.selectbox("Highest Activity Stage", stage_options, key=f"stage_{dataset_name}")
+    else:
+        stage_options = ['All'] + list(data['pathway_direction'].unique())
+        selected_stage = st.sidebar.selectbox("Highest Activity Stage", stage_options, key=f"stage_{dataset_name}")
     
     # Significance filter
     show_significant_only = st.sidebar.checkbox("Show only significant reactions (p < 0.05)", value=False, key=f"sig_{dataset_name}")
@@ -370,11 +389,24 @@ def create_three_way_pathway_explorer(data, dataset_name):
             st.sidebar.success(f"Found {len(filtered_data)} reactions matching '{search_term}'")
     
     # Apply other filters
-    if selected_trajectory != 'All':
+    if selected_trajectory != 'All' and 'developmental_trajectory' in filtered_data.columns:
         filtered_data = filtered_data[filtered_data['developmental_trajectory'] == selected_trajectory]
     
     if selected_stage != 'All':
-        filtered_data = filtered_data[filtered_data['pathway_direction'] == selected_stage]
+        if 'early_mean' in filtered_data.columns and 'late_mean' in filtered_data.columns and 'mature_mean' in filtered_data.columns:
+            # For three-way data, filter by calculated highest stage
+            def get_highest_stage(row):
+                means = {
+                    'Early_Selection': row['early_mean'],
+                    'Late_Selection': row['late_mean'], 
+                    'Mature_CD8SP': row['mature_mean']
+                }
+                return max(means, key=means.get)
+            
+            filtered_data['highest_stage'] = filtered_data.apply(get_highest_stage, axis=1)
+            filtered_data = filtered_data[filtered_data['highest_stage'] == selected_stage]
+        else:
+            filtered_data = filtered_data[filtered_data['pathway_direction'] == selected_stage]
     
     if show_significant_only:
         filtered_data = filtered_data[filtered_data['significant'] == True]
@@ -392,15 +424,46 @@ def create_three_way_pathway_explorer(data, dataset_name):
         st.header("📋 Pathways")
         
         # Get unique pathways from filtered data with stats
-        pathways = filtered_data.groupby('pathway').agg({
-            'pathway_direction': 'first',
-            'developmental_trajectory': lambda x: x.value_counts().index[0],  # Most common trajectory
-            'f_statistic': 'median',
-            'significant': 'sum',
-            'reaction_id': 'count'
-        }).reset_index()
-        
-        pathways.columns = ['pathway', 'highest_stage', 'common_trajectory', 'median_f', 'n_significant', 'n_total']
+        if 'early_mean' in filtered_data.columns and 'late_mean' in filtered_data.columns and 'mature_mean' in filtered_data.columns:
+            # For three-way data, calculate highest stage for each pathway
+            if 'highest_stage' not in filtered_data.columns:
+                def get_highest_stage(row):
+                    means = {
+                        'Early_Selection': row['early_mean'],
+                        'Late_Selection': row['late_mean'], 
+                        'Mature_CD8SP': row['mature_mean']
+                    }
+                    return max(means, key=means.get)
+                filtered_data['highest_stage'] = filtered_data.apply(get_highest_stage, axis=1)
+            
+            agg_dict = {
+                'highest_stage': lambda x: x.value_counts().index[0],  # Most common highest stage
+                'f_statistic': 'median',
+                'significant': 'sum',
+                'reaction_id': 'count'
+            }
+            
+            if 'developmental_trajectory' in filtered_data.columns:
+                agg_dict['developmental_trajectory'] = lambda x: x.value_counts().index[0]  # Most common trajectory
+                
+            pathways = filtered_data.groupby('pathway').agg(agg_dict).reset_index()
+            
+            if 'developmental_trajectory' in pathways.columns:
+                pathways.columns = ['pathway', 'highest_stage', 'median_f', 'n_significant', 'n_total', 'common_trajectory']
+            else:
+                pathways.columns = ['pathway', 'highest_stage', 'median_f', 'n_significant', 'n_total']
+                pathways['common_trajectory'] = 'Unknown'
+        else:
+            # Regular two-group comparison
+            pathways = filtered_data.groupby('pathway').agg({
+                'pathway_direction': 'first',
+                'developmental_trajectory': lambda x: x.value_counts().index[0] if 'developmental_trajectory' in filtered_data.columns else 'N/A',
+                'f_statistic': 'median',
+                'significant': 'sum',
+                'reaction_id': 'count'
+            }).reset_index()
+            
+            pathways.columns = ['pathway', 'highest_stage', 'common_trajectory', 'median_f', 'n_significant', 'n_total']
         pathways['pct_significant'] = (pathways['n_significant'] / pathways['n_total'] * 100).round(1)
         
         # Sort pathways by F-statistic then by % significant
@@ -587,7 +650,7 @@ with tab1:
     - Cohen's D measures 'how different' two groups are (0 = no difference)
     - Cohen's D of +2 = CD5 hi cells have higher metabolic flux, -2 = CD5 lo cells have higher flux
     """)
-    create_pathway_explorer(cd4_data_loaded, "CD4", "CD5_hi", "CD5_lo")
+    create_pathway_explorer(cd4_data_loaded, "CD4", "CD5 hi", "CD5 lo")
 
 with tab2:
     st.header("CD8+ T Cell Metabolic Activity")
