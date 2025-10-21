@@ -51,35 +51,6 @@ def load_cd8_data():
             st.sidebar.error(f"❌ CD8 data not found: {e2}")
             return None
 
-@st.cache_data
-def load_thymic_early_late():
-    try:
-        df = pd.read_csv('thymic_development_Early_vs_Late_Selection_comprehensive.csv')
-        st.sidebar.success(f"✅ Early vs Late: {len(df)} reactions, {df['significant'].sum()} significant")
-        return df
-    except FileNotFoundError:
-        st.sidebar.error("❌ Early vs Late data not found")
-        return None
-
-@st.cache_data
-def load_thymic_late_mature():
-    try:
-        df = pd.read_csv('thymic_development_Late_vs_Mature_CD8SP_comprehensive.csv')
-        st.sidebar.success(f"✅ Late vs Mature: {len(df)} reactions, {df['significant'].sum()} significant")
-        return df
-    except FileNotFoundError:
-        st.sidebar.error("❌ Late vs Mature data not found")
-        return None
-
-@st.cache_data
-def load_thymic_early_mature():
-    try:
-        df = pd.read_csv('thymic_development_Early_vs_Mature_CD8SP_comprehensive.csv')
-        st.sidebar.success(f"✅ Early vs Mature: {len(df)} reactions, {df['significant'].sum()} significant")
-        return df
-    except FileNotFoundError:
-        st.sidebar.error("❌ Early vs Mature data not found")
-        return None
 
 @st.cache_data
 def load_strain_early():
@@ -164,9 +135,12 @@ def create_strain_pathway_explorer(data, dataset_name, stage_name):
         else:
             st.sidebar.success(f"Found {len(filtered_data)} reactions matching '{search_term}'")
     
-    # Apply other filters
+    # Apply strain filter - need to use pathway-level aggregation
     if selected_strain != 'All':
-        filtered_data = filtered_data[filtered_data['highest_strain'] == selected_strain]
+        # Get pathways where the selected strain is highest
+        pathway_strain_map = filtered_data.groupby('pathway')['pathway_highest_strain'].first()
+        pathways_for_strain = pathway_strain_map[pathway_strain_map == selected_strain].index
+        filtered_data = filtered_data[filtered_data['pathway'].isin(pathways_for_strain)]
     
     if show_significant_only:
         filtered_data = filtered_data[filtered_data['significant'] == True]
@@ -500,23 +474,17 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
 # LOAD ALL DATA FIRST
 cd4_data_loaded = load_cd4_data()
 cd8_data_loaded = load_cd8_data()
-thymic_early_late_loaded = load_thymic_early_late()
-thymic_late_mature_loaded = load_thymic_late_mature()
-thymic_early_mature_loaded = load_thymic_early_mature()
 strain_early_loaded = load_strain_early()
 strain_late_loaded = load_strain_late()
 strain_mature_loaded = load_strain_mature()
 
 # CREATE TABS
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-    "🧬 CD4+ T Cells", 
-    "🧬 CD8+ T Cells", 
-    "🔄 Early vs Late", 
-    "🔄 Late vs Mature", 
-    "🔄 Early vs Mature",
-    "🧪 Early Strains",
-    "🧪 Late Strains", 
-    "🧪 Mature Strains"
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "CD4+ T Cells", 
+    "CD8+ T Cells", 
+    "Early Strains",
+    "Late Strains", 
+    "Mature Strains"
 ])
 
 with tab1:
@@ -546,45 +514,6 @@ with tab2:
     create_pathway_explorer(cd8_data_loaded, "CD8", "CD8_CD5_hi", "CD8_CD5_lo")
 
 with tab3:
-    st.header("Thymic Development: Early vs Late Selection")
-    st.markdown("""
-    **Explore metabolic changes during T cell positive selection**
-    - Comparison: Early Selection vs Late Selection stages
-    - Data from Compass metabolic flux analysis of thymic development
-    - Gene associations from Mouse-GEM metabolic model
-    - 🔴 **Red means positive Cohen's d (Early Selection > Late Selection)**, 🔵 **Blue means negative Cohen's d (Late Selection > Early Selection)**
-    - Cohen's D measures 'how different' the developmental stages are (0 = no difference)
-    - Cohen's D of +2 = Early Selection higher flux, -2 = Late Selection higher flux
-    """)
-    create_pathway_explorer(thymic_early_late_loaded, "Early_vs_Late", "Early_Selection", "Late_Selection")
-
-with tab4:
-    st.header("Thymic Development: Late Selection vs Mature CD8SP")
-    st.markdown("""
-    **Explore metabolic changes during T cell maturation**
-    - Comparison: Late Selection vs Mature CD8SP stages
-    - Data from Compass metabolic flux analysis of thymic development
-    - Gene associations from Mouse-GEM metabolic model
-    - 🔴 **Red means positive Cohen's d (Late Selection > Mature CD8SP)**, 🔵 **Blue means negative Cohen's d (Mature CD8SP > Late Selection)**
-    - Cohen's D measures 'how different' the developmental stages are (0 = no difference)
-    - Cohen's D of +2 = Mature CD8SP higher flux, -2 = Late Selection higher flux
-    """)
-    create_pathway_explorer(thymic_late_mature_loaded, "Late_vs_Mature", "Late_Selection", "Mature_CD8SP")
-
-with tab5:
-    st.header("Thymic Development: Early Selection vs Mature CD8SP")
-    st.markdown("""
-    **Explore metabolic changes across T cell development**
-    - Comparison: Early Selection vs Mature CD8SP stages
-    - Data from Compass metabolic flux analysis of thymic development
-    - Gene associations from Mouse-GEM metabolic model
-    - 🔴 **Red means positive Cohen's d (Early Selection > Mature CD8SP)**, 🔵 **Blue means negative Cohen's d (Mature CD8SP > Early Selection)**
-    - Cohen's D measures 'how different' the developmental stages are (0 = no difference)
-    - Cohen's D of +2 = Mature CD8SP higher flux, -2 = Early Selection higher flux
-    """)
-    create_pathway_explorer(thymic_early_mature_loaded, "Early_vs_Mature", "Early_Selection", "Mature_CD8SP")
-
-with tab6:
     st.header("Strain Comparison: Early Selection Stage")
     st.markdown("""
     **Explore metabolic differences between F5, OT1, and TG6 strains during early T cell selection**
@@ -597,7 +526,7 @@ with tab6:
     """)
     create_strain_pathway_explorer(strain_early_loaded, "Early_Strains", "Early Selection")
 
-with tab7:
+with tab4:
     st.header("Strain Comparison: Late Selection Stage")
     st.markdown("""
     **Explore metabolic differences between F5, OT1, and TG6 strains during late T cell selection**
@@ -610,7 +539,7 @@ with tab7:
     """)
     create_strain_pathway_explorer(strain_late_loaded, "Late_Strains", "Late Selection")
 
-with tab8:
+with tab5:
     st.header("Strain Comparison: Mature CD8SP Stage")
     st.markdown("""
     **Explore metabolic differences between F5, OT1, and TG6 strains in mature CD8+ T cells**
