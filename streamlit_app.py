@@ -223,24 +223,6 @@ def create_strain_pathway_explorer(data, dataset_name, stage_name):
                 # Show reaction details
                 st.write(f"**{len(pathway_data)} reactions in selected pathways**")
                 
-                # Create volcano plot
-                fig = px.scatter(
-                    pathway_data,
-                    x='cohens_d',
-                    y=pathway_data['p_value'].apply(lambda x: -np.log10(max(x, 1e-300))),
-                    color='highest_strain',
-                    color_discrete_map={"OT1": "red", "F5": "orange", "TG6": "blue"},
-                    hover_data=['reaction_name', 'pathway', 'ranking_text'],
-                    title=f"Strain Comparison Volcano Plot - {stage_name}",
-                    labels={'x': "Cohen's d", 'y': '-log10(p-value)', 'color': 'Highest Strain'}
-                )
-                
-                fig.add_hline(y=-np.log10(0.05), line_dash="dash", line_color="gray", 
-                             annotation_text="p = 0.05")
-                fig.add_vline(x=0, line_dash="dash", line_color="gray")
-                
-                st.plotly_chart(fig, use_container_width=True)
-                
                 # Show detailed table
                 display_cols = ['reaction_id', 'pathway', 'f_statistic', 'p_value', 'cohens_d', 
                                'ranking_text', 'highest_strain', 'reaction_name', 'genes']
@@ -415,24 +397,6 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
                 # Show reaction details
                 st.write(f"**{len(pathway_data)} reactions in selected pathways**")
                 
-                # Create volcano plot
-                fig = px.scatter(
-                    pathway_data,
-                    x='cohens_d',
-                    y=pathway_data['p_value'].apply(lambda x: -np.log10(max(x, 1e-300))),
-                    color=pathway_data['cohens_d'].apply(lambda x: 'Positive' if x > 0 else 'Negative'),
-                    color_discrete_map={'Positive': 'red', 'Negative': 'blue'},
-                    hover_data=['reaction_name', 'pathway'],
-                    title=f"{dataset_name} Volcano Plot",
-                    labels={'x': "Cohen's d", 'y': '-log10(p-value)', 'color': 'Direction'}
-                )
-                
-                fig.add_hline(y=-np.log10(0.05), line_dash="dash", line_color="gray", 
-                             annotation_text="p = 0.05")
-                fig.add_vline(x=0, line_dash="dash", line_color="gray")
-                
-                st.plotly_chart(fig, use_container_width=True)
-                
                 # Show detailed table
                 display_cols = ['reaction_id', 'pathway', 'cohens_d', 'p_value', 'significant', 
                                'reaction_name', 'genes']
@@ -450,7 +414,7 @@ def create_pathway_explorer(data, dataset_name, hi_label, lo_label):
                         use_container_width=True,
                         height=400
                     )
-            else:
+                    else:
                 st.info("No reactions found for selected pathways with current filters.")
         else:
             st.info("👈 Select pathways from the sidebar to view detailed reaction data")
